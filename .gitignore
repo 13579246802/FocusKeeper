@@ -19,3 +19,7 @@ data/events.jsonl
 data/events.jsonl.bak
 data/settings.json
 data/export/
+
+# 开发期临时截图与文本
+shot*.png
+shot*.png.txt
