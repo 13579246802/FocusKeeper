@@ -17,7 +17,8 @@
 | `3` | 走神 —— **计时不会停**，只记一笔，屏幕上给一句安慰 |
 | `4` | 休息 |
 | `5` | 统计 |
-| `←` `→` | 开始前调目标时长（初级 / 中级 / 高级） |
+| `↑` `↓` | 开始前直接换等级：初级 15 分 / 中级 25 分 / 高级 45 分 |
+| `←` `→` | 开始前微调目标分钟（等级按时长自动跟着变） |
 | `Tab` | 开始前切换载体：电脑上小窗 / 离开电脑小窗 / 离开电脑全屏 |
 | `F11` | 专注中随时切换小窗 / 全屏 |
 | `Ctrl+E` | 导出 CSV |
@@ -84,7 +85,8 @@ Single file, zero dependencies, fully local — nothing leaves your machine.
 | `3` | Distract — **the timer keeps running**, it just logs the lapse with a line of comfort |
 | `4` | Break |
 | `5` | Stats |
-| `←` `→` | Adjust goal duration before starting |
+| `↑` `↓` | Switch level directly before starting: Beginner 15 / Intermediate 25 / Advanced 45 min |
+| `←` `→` | Fine-tune goal minutes before starting |
 | `Tab` | Cycle mode before starting: on-PC window / off-PC window / off-PC fullscreen |
 | `F11` | Toggle window / fullscreen any time while focusing |
 | `Ctrl+E` | Export CSV |

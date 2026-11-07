@@ -75,7 +75,7 @@ public sealed class MainForm : Form
     private int _badLines;
     private readonly List<(string Label, int Minutes, bool Today)> _chart = new();
 
-    private const string HintIdle = "1 开始   ← → 调时长   5 统计";
+    private const string HintIdle = "1 开始   ↑↓ 等级   ←→ 分钟   5 统计";
     private const string HintFocus = "1 开始  2 结束  3 走神  4 休息";
     private const string HintBreak = "1 继续  4 结束休息";
 
@@ -434,6 +434,8 @@ public sealed class MainForm : Form
         else if (key is Keys.D4 or Keys.NumPad4) { OnKey4(); e.Handled = true; }
         else if (key is Keys.D5 or Keys.NumPad5) { ToggleStats(); e.Handled = true; }
         else if (key == Keys.F11) { ToggleFullscreen(); e.Handled = true; }
+        else if (key == Keys.Up) { CycleLevel(1); e.Handled = true; }
+        else if (key == Keys.Down) { CycleLevel(-1); e.Handled = true; }
         else if (key == Keys.Left) { ShiftGoal(-5); e.Handled = true; }
         else if (key == Keys.Right) { ShiftGoal(5); e.Handled = true; }
         else if (key == Keys.Escape && _fullscreenActive) { _fullscreen = false; RefreshUi(); e.Handled = true; }
@@ -511,8 +513,23 @@ public sealed class MainForm : Form
     private void ShiftGoal(int delta)
     {
         if (_state.Phase != Phase.Idle) return;
+        SetGoal(_state.GoalMinutes + delta);
+    }
 
-        var g = Math.Clamp(_state.GoalMinutes + delta, 5, 120);
+    /// <summary>↑/↓ 直接换等级，同时跳到该档默认时长。←/→ 仍可微调分钟。</summary>
+    private void CycleLevel(int dir)
+    {
+        if (_state.Phase != Phase.Idle) return;
+        var cur = Array.FindIndex(LevelPresets, l => l.Name == LevelFor(_state.GoalMinutes));
+        if (cur < 0) cur = 0;
+        var next = LevelPresets[(cur + dir + LevelPresets.Length) % LevelPresets.Length];
+        SetGoal(next.DefaultGoal);
+        ShowMessage($"等级：{next.Name}（默认 {next.DefaultGoal} 分钟）。← → 可微调。", 3);
+    }
+
+    private void SetGoal(int minutes)
+    {
+        var g = Math.Clamp(minutes, 5, 120);
         _state.GoalMinutes = g;
         _settings.GoalMinutes = g;
         _settings.Level = LevelFor(g);
@@ -520,6 +537,13 @@ public sealed class MainForm : Form
         Settings.Save(_settingsPath, _settings);
         RefreshUi();
     }
+
+    private static readonly (string Name, int DefaultGoal)[] LevelPresets =
+    {
+        ("初级", 15),
+        ("中级", 25),
+        ("高级", 45),
+    };
 
     private static string LevelFor(int goal) => goal switch
     {
@@ -762,7 +786,7 @@ public sealed class MainForm : Form
         };
 
         var goal = _state.GoalMinutes;
-        _lblMeta.Text = $"目标 {goal} 分 · {LevelFor(goal)} · 今日 {_todayFocusSec / 60:0} 分 · 走神 {_todayDistracts}";
+        _lblMeta.Text = $"{LevelFor(goal)} · 目标 {goal} 分 · 今日 {_todayFocusSec / 60:0} 分 · 走神 {_todayDistracts}";
 
         _lblHint.Text = phase switch
         {
@@ -797,7 +821,7 @@ public sealed class MainForm : Form
         if (phase == Phase.Break) return $"休息中，{Fmt(_state.BreakRemaining)} 后提醒你。按 1 或 4 提前回来。";
 
         if (phase == Phase.Idle)
-            return _pendingNotice.Length > 0 ? _pendingNotice : "按 1 开始。走神了按 3，表不会停。";
+            return _pendingNotice.Length > 0 ? _pendingNotice : "按 1 开始。↑↓ 换等级，←→ 调分钟。";
 
         return "";
     }
