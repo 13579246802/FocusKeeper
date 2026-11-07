@@ -30,7 +30,7 @@ public sealed record SessionSummary(
     public string ShapeLabel => Mode == "offpc" ? (Fullscreen ? "全屏" : "小窗") : "";
 }
 
-public static class Stats
+public static partial class Stats
 {
     public static List<SessionSummary> Sessions(IEnumerable<EventRecord> events)
     {
@@ -168,4 +168,56 @@ public static class Stats
 public sealed record DayStat(double FocusSeconds, int Sessions, int Distractions, int Achieved)
 {
     public int FocusMinutes => (int)Math.Round(FocusSeconds / 60);
+}
+
+public sealed record Recommendation(int GoalMinutes, string Reason);
+
+public static partial class Stats
+{
+    /// <summary>
+    /// 按最近表现推荐时长。规则必须能一句话讲清，不玩黑箱：
+    /// 近 3 次（14 天内）都达标且走神不密 → +10（上限 60）；都没到 → -5（下限 10）；其余维持。
+    /// 刚练 1 次不加不减——单次表现说明不了趋势。
+    /// </summary>
+    public static Recommendation Recommend(List<SessionSummary> all, int currentGoal, DateTime? today = null)
+    {
+        var t = (today ?? DateTime.Today).Date;
+        var recent = all.Where(s => (t - s.Date).TotalDays <= 14)
+                        .OrderBy(s => s.StartAt)
+                        .TakeLast(3)
+                        .ToList();
+
+        if (recent.Count == 0)
+        {
+            return all.Count > 0
+                ? new Recommendation(Math.Clamp(currentGoal, 10, 60), "两周没练了，从原来的档位重新起步就够")
+                : new Recommendation(15, "还没开始记录，先从 15 分钟练起");
+        }
+
+        if (recent.Count < 2)
+        {
+            return new Recommendation(Math.Clamp(currentGoal, 10, 60),
+                recent[0].Achieved ? "刚回来练，先在这一档坐稳" : "上次没到目标，同一档再来一次");
+        }
+
+        var allDone = recent.All(s => s.Achieved);
+        var noneDone = recent.All(s => !s.Achieved);
+
+        if (allDone)
+        {
+            // 走神密度：每 30 分钟专注里走神超过 3 次，说明这一档还没坐稳，先不加
+            var dense = recent.Any(s => s.FocusSeconds > 0
+                                        && s.Distractions / (s.FocusSeconds / 1800.0) > 3);
+            if (!dense && currentGoal < 60)
+                return new Recommendation(currentGoal + 10, "最近几次都到了目标，加 10 分钟试试");
+
+            return new Recommendation(Math.Clamp(currentGoal, 10, 60),
+                dense ? "达标了，但走神还密，先在这一档坐稳" : "已经在最高档，稳住就是赢");
+        }
+
+        if (noneDone)
+            return new Recommendation(Math.Max(10, currentGoal - 5), "最近几次都没到目标，减 5 分钟更稳");
+
+        return new Recommendation(Math.Clamp(currentGoal, 10, 60), "按现在的节奏来，不用急");
+    }
 }

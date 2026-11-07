@@ -202,6 +202,55 @@ internal static class SelfTest
         Check("到点提醒交代了自动收工规则",
             Enumerable.Range(0, 4).All(_ => phrases.Next("unclosed").Text.Contains("{wait}")));
 
+        // ---- 8. 今日一句与时长推荐 ----
+        var rec1 = phrases.Next("recommend");
+        Check("文案类别 recommend 有内容", rec1.Text.Length > 4, rec1.Text);
+        Check("recommend 文案带出处", rec1.Source.Length > 0 && rec1.Source != "自写", rec1.Source);
+
+        SessionSummary Mk(string sid, int daysAgo, int goal, double focusSec, int dis) =>
+            new(sid, DateTime.Today.AddDays(-daysAgo),
+                new DateTimeOffset(DateTime.Today.AddDays(-daysAgo).AddHours(9), TimeSpan.FromHours(8)),
+                "推荐测试", "中级", goal, focusSec, dis, 1, goal > 0 && focusSec >= goal * 60, "onpc", false);
+
+        Check("没有记录时推荐 15 分钟起步",
+            Stats.Recommend(new List<SessionSummary>(), 25).GoalMinutes == 15);
+
+        var up = Stats.Recommend(new List<SessionSummary>
+        {
+            Mk("r1", 3, 15, 950, 1), Mk("r2", 2, 15, 940, 1), Mk("r3", 1, 15, 960, 1)
+        }, 15);
+        Check("连续达标且走神少 → 加 10 分钟", up.GoalMinutes == 25 && up.Reason.Contains("加 10"), $"{up.GoalMinutes} {up.Reason}");
+
+        var down = Stats.Recommend(new List<SessionSummary>
+        {
+            Mk("d1", 3, 25, 600, 2), Mk("d2", 2, 25, 700, 3), Mk("d3", 1, 25, 650, 2)
+        }, 25);
+        Check("连续没到目标 → 减 5 分钟", down.GoalMinutes == 20 && down.Reason.Contains("减 5"), $"{down.GoalMinutes} {down.Reason}");
+
+        var keep = Stats.Recommend(new List<SessionSummary>
+        {
+            Mk("k1", 3, 25, 1500, 2), Mk("k2", 2, 25, 2000, 3), Mk("k3", 1, 25, 1200, 1)
+        }, 25);
+        Check("有达有没到 → 维持现状", keep.GoalMinutes == 25, $"{keep.GoalMinutes} {keep.Reason}");
+
+        var dense = Stats.Recommend(new List<SessionSummary>
+        {
+            Mk("c1", 3, 15, 900, 20), Mk("c2", 2, 15, 900, 20), Mk("c3", 1, 15, 900, 20)
+        }, 15);
+        Check("达标但走神过密 → 不加档", dense.GoalMinutes == 15, $"{dense.GoalMinutes} {dense.Reason}");
+
+        var single = Stats.Recommend(new List<SessionSummary>
+        {
+            Mk("s1", 1, 15, 950, 1)
+        }, 15);
+        Check("只练 1 次不升档", single.GoalMinutes == 15, $"{single.GoalMinutes} {single.Reason}");
+
+        var stale = Stats.Recommend(new List<SessionSummary>
+        {
+            Mk("t1", 30, 25, 1500, 1), Mk("t2", 29, 25, 1500, 1), Mk("t3", 28, 25, 1500, 1)
+        }, 25);
+        Check("两周没练 → 回原档位起步", stale.GoalMinutes == 25 && stale.Reason.Contains("两周"), $"{stale.GoalMinutes} {stale.Reason}");
+
         var summary = $"selftest: {pass} passed, {fail} failed";
         sb.AppendLine();
         sb.AppendLine(summary);

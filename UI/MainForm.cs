@@ -75,6 +75,9 @@ public sealed class MainForm : Form
     private int _badLines;
     private readonly List<(string Label, int Minutes, bool Today)> _chart = new();
 
+    // 待机时显示的「今日一句」：每天换一条，一天内不闪变
+    private string _dailyQuote = "";
+
     private const string HintIdle = "1 开始   ↑↓ 等级   ←→ 分钟   5 统计";
     private const string HintFocus = "1 开始  2 结束  3 走神  4 休息";
     private const string HintBreak = "1 继续  4 结束休息";
@@ -100,6 +103,7 @@ public sealed class MainForm : Form
 
         BuildUi();
         LoadToday();
+        _dailyQuote = PickQuote();
         ApplyWindowPos();
 
         // 跨重启保留「上次提醒时刻」，否则一天开关几次就会重复被念
@@ -113,6 +117,8 @@ public sealed class MainForm : Form
 
         if (repaired > 0)
             ShowMessage($"上次有 {repaired} 段没有正常结束，已按最后一条记录补上。", 8);
+        else
+            ApplyRecommendation(announce: true);   // 开机时按最近表现推荐今天的时长
 
         RefreshUi();
     }
@@ -479,6 +485,8 @@ public sealed class MainForm : Form
         _unclosedShown = false;
         _fullscreen = false;
         LoadToday();
+        _statsDirty = true;
+        ApplyRecommendation(announce: false);   // 收工后重算：下一段该练多久
         var p = _phrases.Next("stop");
         ShowMessage(Fill(p), 7);
         RefreshUi();
@@ -544,6 +552,39 @@ public sealed class MainForm : Form
         ("中级", 25),
         ("高级", 45),
     };
+
+    /// <summary>待机时的「今日一句」：一天取一条，来源可查证。</summary>
+    private string PickQuote()
+    {
+        var p = _phrases.Next("recommend");
+        if (p.Text.Length == 0) return "";
+        return string.IsNullOrEmpty(p.Source) || p.Source == "自写"
+            ? p.Text
+            : $"「{p.Text}」 ——{p.Source}";
+    }
+
+    /// <summary>
+    /// 按最近表现推荐并设置目标时长。
+    /// announce=true（开机）：弹消息说明；false（收工后）：存成待机说明，回到待机再讲。
+    /// </summary>
+    private void ApplyRecommendation(bool announce)
+    {
+        if (_state.Phase != Phase.Idle) return;
+
+        var rec = Stats.Recommend(Stats.Sessions(_store.ReadAll(out _)), _state.GoalMinutes);
+
+        if (rec.GoalMinutes != _state.GoalMinutes)
+        {
+            SetGoal(rec.GoalMinutes);
+            var why = $"建议 {rec.GoalMinutes} 分钟：{rec.Reason}。←→ 可改。";
+            if (announce) ShowMessage(why, 10);
+            else _pendingNotice = why;
+        }
+        else if (announce && rec.Reason.Length > 0)
+        {
+            ShowMessage($"今天 {rec.GoalMinutes} 分钟。{rec.Reason}。", 8);
+        }
+    }
 
     private static string LevelFor(int goal) => goal switch
     {
@@ -630,6 +671,7 @@ public sealed class MainForm : Form
     {
         if (_loadedDay == DateTime.Today) return;
         LoadToday();
+        _dailyQuote = PickQuote();
         _messageUntil = DateTime.MinValue;
     }
 
@@ -821,7 +863,10 @@ public sealed class MainForm : Form
         if (phase == Phase.Break) return $"休息中，{Fmt(_state.BreakRemaining)} 后提醒你。按 1 或 4 提前回来。";
 
         if (phase == Phase.Idle)
-            return _pendingNotice.Length > 0 ? _pendingNotice : "按 1 开始。↑↓ 换等级，←→ 调分钟。";
+        {
+            if (_pendingNotice.Length > 0) return _pendingNotice;
+            return _dailyQuote.Length > 0 ? _dailyQuote : "按 1 开始。↑↓ 换等级，←→ 调分钟。";
+        }
 
         return "";
     }

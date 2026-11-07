@@ -23,6 +23,9 @@ public sealed class PhraseBank
 
     /// <summary>到点没人按、按目标时长自动收工后的说明。</summary>
     public List<Phrase> Auto { get; set; } = new();
+
+    /// <summary>待机时显示的「今日一句」：有出处的真话，不冒充名人名言。</summary>
+    public List<Phrase> Recommend { get; set; } = new();
 }
 
 /// <summary>
@@ -67,6 +70,7 @@ public sealed class Phrases
         if (bank.Nudge.Count == 0) bank.Nudge.Add(new Phrase { Text = "今天还没有记录。想开始时按 1。" });
         if (bank.Unclosed.Count == 0) bank.Unclosed.Add(new Phrase { Text = "已到 {goal} 分钟。按 2 收工；{wait} 分钟内没有按键，就按 {goal} 分钟记录。" });
         if (bank.Auto.Count == 0) bank.Auto.Add(new Phrase { Text = "按 {goal} 分钟收工了。要继续就按 1。" });
+        if (bank.Recommend.Count == 0) bank.Recommend.Add(new Phrase { Text = "怕什么真理无穷，进一寸有一寸的欢喜。", Source = "胡适" });
 
         return new Phrases(bank) { FilePath = path };
     }
@@ -81,6 +85,7 @@ public sealed class Phrases
             "nudge" => _bank.Nudge,
             "unclosed" => _bank.Unclosed,
             "auto" => _bank.Auto,
+            "recommend" => _bank.Recommend,
             _ => _bank.Stop
         };
 

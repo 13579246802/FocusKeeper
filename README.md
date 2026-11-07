@@ -33,6 +33,10 @@
 
 **不做连续打卡。** 断一天就清零的机制，惩罚的恰恰是"回归"，只会让人破罐破摔。看本周总量就够了。
 
+**时长建议交给数据，不交给感觉。** 每次打开和收工后，工具按最近几次（14 天内）的表现建议今天的时长：连续达标且走神不密就加 10 分钟（上限 60），连续没到目标就减 5 分钟（下限 10），单次表现不算数。建议都会带上理由，不同意随时用 `↑↓` `←→` 改。
+
+**待机时显示「今日一句」。** 都是书里有出处的话（庄子、荀子、苏轼、胡适、里尔克、村上春树……），每天换一条。没有鸡汤，没有网红语录，每一条都能查到原文。
+
 ## 下载
 
 到 [Releases](../../releases) 页面下载 `专注计时器-便携版.zip`，解压后双击 `FocusKeeper.exe`。
@@ -50,7 +54,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-回归测试（36 项，覆盖状态机、存储修复、截断一致性、文案规范）：
+回归测试（45 项，覆盖状态机、存储修复、截断一致性、文案规范、时长推荐）：
 
 ```bash
 app/FocusKeeper.exe --selftest
@@ -101,6 +105,10 @@ Single file, zero dependencies, fully local — nothing leaves your machine.
 
 **No streaks.** A counter that resets after one missed day punishes exactly the people who come back. Weekly totals are enough.
 
+**Duration advice comes from data, not vibes.** On every launch and after every session, the tool suggests today's goal from your recent record (last 3 sessions within 14 days): all achieved with sparse distractions → +10 minutes (cap 60); all missed → −5 (floor 10); a single session never changes anything. Every suggestion comes with its reason, and `↑↓` `←→` always has the final say.
+
+**A "line of the day" while idle.** Every quote shown has a checkable source (Zhuangzi, Xunzi, Su Shi, Hu Shih, Rilke, Murakami...). No chicken soup, no influencer quotes — each one traces back to its original text.
+
 ## Download
 
 Grab `专注计时器-便携版.zip` from the [Releases](../../releases) page, unzip, run `FocusKeeper.exe`.
@@ -118,7 +126,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-Regression tests (36 checks covering the state machine, storage repair, truncation consistency, and phrase rules):
+Regression tests (45 checks covering the state machine, storage repair, truncation consistency, phrase rules, and goal recommendation):
 
 ```bash
 app/FocusKeeper.exe --selftest
