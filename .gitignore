@@ -1,0 +1,21 @@
+# 构建产物
+bin/
+obj/
+app/
+*.zip
+
+# IDE / 临时
+.vs/
+*.user
+selftest.log
+probe.txt
+dump.csv
+shortcut.log
+.demo*/
+
+# 个人数据：事件流、设置、导出，绝不进仓库
+# （data/phrases.json 是默认文案库，保留在仓库里）
+data/events.jsonl
+data/events.jsonl.bak
+data/settings.json
+data/export/
