@@ -81,6 +81,7 @@ public sealed class MainForm : Form
     // 休息音乐开关（M 键 / 右键菜单）
     private bool _musicOn;
     private readonly MusicLibrary _music;
+    private readonly string _userMusicDir;
 
     private const string HintIdle = "1 开始   ↑↓ 等级   ←→ 分钟   5 统计";
     private const string HintFocus = "1 开始  2 结束  3 走神  4 休息";
@@ -105,9 +106,8 @@ public sealed class MainForm : Form
         _musicOn = settings.MusicOn;
 
         // 曲库：data\music（用户上传）优先，exe 旁 music\（自带）兜底，两处都空才用合成雨声
-        _music = new MusicLibrary(
-            Path.Combine(Path.GetDirectoryName(settingsPath) ?? ".", "music"),
-            Path.Combine(AppContext.BaseDirectory, "music"));
+        _userMusicDir = Path.Combine(Path.GetDirectoryName(settingsPath) ?? ".", "music");
+        _music = new MusicLibrary(_userMusicDir, Path.Combine(AppContext.BaseDirectory, "music"));
 
         _pendingMode = WorkModeText.Parse(settings.LastWorkMode);
         _pendingFullscreen = settings.LastFullscreen;
@@ -344,6 +344,7 @@ public sealed class MainForm : Form
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("休息音乐 开/关（M）", null, (_, _) => ToggleMusic());
         menu.Items.Add("自动休息 开/关（到点直接进休息 / 按 4 确认）", null, (_, _) => ToggleAutoBreak());
+        menu.Items.Add("上传我自己的音乐…", null, (_, _) => UploadMusic());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("打开数据文件夹", null, (_, _) => OpenDataFolder());
         menu.Items.Add(new ToolStripSeparator());
@@ -629,6 +630,36 @@ public sealed class MainForm : Form
         ShowMessage(_settings.AutoBreak
             ? "自动休息：开。到目标分钟直接进休息、放音乐。"
             : "自动休息：关。到目标分钟只提醒，按 4 才进休息。", 4);
+        RefreshUi();
+    }
+
+    /// <summary>
+    /// 弹文件选择框让用户挑自己的音乐，复制进 data\music（复制而非引用：
+    /// 整个文件夹拷走就是搬家，曲子要跟着记录走）。用户目录一旦有文件，
+    /// 曲库整体切到用户曲子，自带的不再播放。
+    /// </summary>
+    private void UploadMusic()
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Title = "选择休息时播放的音乐（可按住 Ctrl 多选）",
+            Multiselect = true,
+            Filter = "音频文件 (*.mp3;*.wav;*.m4a;*.flac;*.wma)|*.mp3;*.wav;*.m4a;*.flac;*.wma|所有文件 (*.*)|*.*",
+            InitialDirectory = Directory.Exists(_userMusicDir) ? _userMusicDir : ""
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            Directory.CreateDirectory(_userMusicDir);
+            foreach (var src in dlg.FileNames)
+                File.Copy(src, Path.Combine(_userMusicDir, Path.GetFileName(src)), overwrite: true);
+            ShowMessage($"已放入 {dlg.FileNames.Length} 个文件。你的曲子优先生效，本段音乐播完就会换你的。", 6);
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"放入失败：{ex.Message}", 6);
+        }
         RefreshUi();
     }
 

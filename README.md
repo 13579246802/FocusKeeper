@@ -38,7 +38,7 @@
 
 **待机时显示「今日一句」。** 都是书里有出处的话（庄子、荀子、苏轼、胡适、里尔克、村上春树……），每天换一条。没有鸡汤，没有网红语录，每一条都能查到原文。
 
-**休息是循环的一部分，不是中断。** 专注到点响一声，默认**直接进休息**（可右键菜单或 `settings.json` 的 `autoBreak` 改成按 `4` 确认）：初级 3 分 / 中级 5 分 / 高级 10 分（休息长度和专注长度是配套的，短专注配长休息只会让人走神）。休息时随机放**自带的免费钢琴曲**（4 首，Kevin MacLeod 作品，CC-BY 4.0，署名见 `music\LICENSES.txt`；曲子播完自动换下一首）。想听自己的？把音频文件丢进 `data\music\`，你的曲子优先，自带的就不播；曲库全空时退回程序合成的棕噪雨声。倒计时走完还有 2 分钟缓冲，音乐继续放，屏幕大字等你回来；缓冲期内按 `1`，音乐停，新一轮专注开始，周而复始；缓冲期也没人回来，说明人走了，自动按目标时长收工。
+**休息是循环的一部分，不是中断。** 专注到点响一声，默认**直接进休息**（可右键菜单或 `settings.json` 的 `autoBreak` 改成按 `4` 确认）：初级 3 分 / 中级 5 分 / 高级 10 分（休息长度和专注长度是配套的，短专注配长休息只会让人走神）。休息时随机放**自带的免费钢琴曲**（4 首，Kevin MacLeod 作品，CC-BY 4.0，署名见 `music\LICENSES.txt`；曲子播完自动换下一首）。想听自己的？右键菜单「上传我自己的音乐…」挑文件（会复制进 `data\music\`），你的曲子优先，自带的就不播；曲库全空时退回程序合成的棕噪雨声。倒计时走完还有 2 分钟缓冲，音乐继续放，屏幕大字等你回来；缓冲期内按 `1`，音乐停，新一轮专注开始，周而复始；缓冲期也没人回来，说明人走了，自动按目标时长收工。
 
 ## 下载
 
@@ -111,7 +111,7 @@ Single file, zero dependencies, fully local — nothing leaves your machine.
 
 **Duration advice comes from data, not vibes.** On every launch and after every session, the tool suggests today's goal from your recent record (last 3 sessions within 14 days): all achieved with sparse distractions → +10 minutes (cap 60); all missed → −5 (floor 10); a single session never changes anything. Every suggestion comes with its reason, and `↑↓` `←→` always has the final say.
 
-**Break is part of the loop, not an interruption.** When a segment hits its goal, a chime sounds and by default the break starts immediately (right-click menu or `autoBreak` in `settings.json` switches back to press-`4`-to-confirm): 3 min for Beginner / 5 for Intermediate / 10 for Advanced — break length pairs with focus length. The break randomly plays one of the **4 bundled royalty-free piano tracks** (Kevin MacLeod, CC-BY 4.0; credits in `music\LICENSES.txt`; when a track ends the next one starts automatically). Drop your own audio files into `data\music\` and yours take priority — bundled tracks are skipped; if no files exist anywhere, it falls back to synthesized brown noise. After the countdown a 2-minute grace period begins with the music still on. Press `1` during the grace period and a new focus segment starts; if nobody returns, the session auto-closes at the goal cap.
+**Break is part of the loop, not an interruption.** When a segment hits its goal, a chime sounds and by default the break starts immediately (right-click menu or `autoBreak` in `settings.json` switches back to press-`4`-to-confirm): 3 min for Beginner / 5 for Intermediate / 10 for Advanced — break length pairs with focus length. The break randomly plays one of the **4 bundled royalty-free piano tracks** (Kevin MacLeod, CC-BY 4.0; credits in `music\LICENSES.txt`; when a track ends the next one starts automatically). Drop your own audio files in via the right-click menu (Upload my own music…, they are copied into `data\music\`) and yours take priority — bundled tracks are skipped; if no files exist anywhere, it falls back to synthesized brown noise. After the countdown a 2-minute grace period begins with the music still on. Press `1` during the grace period and a new focus segment starts; if nobody returns, the session auto-closes at the goal cap.
 
 ### Music credits
 
