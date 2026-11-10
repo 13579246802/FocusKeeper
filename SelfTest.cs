@@ -168,6 +168,10 @@ internal static class SelfTest
         Check("等级默认休息：初级 3 / 中级 5 / 高级 10",
             AppState.RestForLevel("初级") == 3 && AppState.RestForLevel("中级") == 5 && AppState.RestForLevel("高级") == 10);
 
+        // ---- 2g. 自动休息默认值 ----
+        var defSettings = new SettingsData();
+        Check("autoBreak 默认开（到点直接进休息）", defSettings.AutoBreak);
+
         // ---- 3. 存储与修复 ----
         var tmp = Path.Combine(Path.GetTempPath(), "fk-selftest-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(tmp);

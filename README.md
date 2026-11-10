@@ -38,7 +38,7 @@
 
 **待机时显示「今日一句」。** 都是书里有出处的话（庄子、荀子、苏轼、胡适、里尔克、村上春树……），每天换一条。没有鸡汤，没有网红语录，每一条都能查到原文。
 
-**休息是循环的一部分，不是中断。** 专注到点响一声，建议你休息：初级 3 分 / 中级 5 分 / 高级 10 分（休息长度和专注长度是配套的，短专注配长休息只会让人走神）。休息时放雨声——程序自己合成的棕噪，没有版权也没有 40MB 的音频包。倒计时走完还有 2 分钟缓冲，音乐继续放，屏幕大字等你回来；缓冲期内按 `1`，音乐停，新一轮专注开始，周而复始；缓冲期也没人回来，说明人走了，自动按目标时长收工。
+**休息是循环的一部分，不是中断。** 专注到点响一声，默认**直接进休息**（可右键菜单或 `settings.json` 的 `autoBreak` 改成按 `4` 确认）：初级 3 分 / 中级 5 分 / 高级 10 分（休息长度和专注长度是配套的，短专注配长休息只会让人走神）。休息时放雨声——程序自己合成的棕噪，没有版权也没有 40MB 的音频包。倒计时走完还有 2 分钟缓冲，音乐继续放，屏幕大字等你回来；缓冲期内按 `1`，音乐停，新一轮专注开始，周而复始；缓冲期也没人回来，说明人走了，自动按目标时长收工。
 
 ## 下载
 
@@ -57,7 +57,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-回归测试（59 项，覆盖状态机、休息循环、存储修复、截断一致性、文案规范、时长推荐、合成音频）：
+回归测试（60 项，覆盖状态机、休息循环、存储修复、截断一致性、文案规范、时长推荐、合成音频）：
 
 ```bash
 app/FocusKeeper.exe --selftest
@@ -111,6 +111,8 @@ Single file, zero dependencies, fully local — nothing leaves your machine.
 
 **Duration advice comes from data, not vibes.** On every launch and after every session, the tool suggests today's goal from your recent record (last 3 sessions within 14 days): all achieved with sparse distractions → +10 minutes (cap 60); all missed → −5 (floor 10); a single session never changes anything. Every suggestion comes with its reason, and `↑↓` `←→` always has the final say.
 
+**Break is part of the loop, not an interruption.** When a segment hits its goal, a chime sounds and by default the break starts immediately (right-click menu or `autoBreak` in `settings.json` switches back to press-`4`-to-confirm): 3 min for Beginner / 5 for Intermediate / 10 for Advanced — break length pairs with focus length. The break plays synthesized brown noise; after the countdown a 2-minute grace period begins with the music still on. Press `1` during the grace period and a new focus segment starts; if nobody returns, the session auto-closes at the goal cap.
+
 **A "line of the day" while idle.** Every quote shown has a checkable source (Zhuangzi, Xunzi, Su Shi, Hu Shih, Rilke, Murakami...). No chicken soup, no influencer quotes — each one traces back to its original text.
 
 ## Download
@@ -130,7 +132,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-Regression tests (59 checks covering the state machine, the break loop, storage repair, truncation consistency, phrase rules, goal recommendation, and synthesized audio):
+Regression tests (60 checks covering the state machine, the break loop, storage repair, truncation consistency, phrase rules, goal recommendation, and synthesized audio):
 
 ```bash
 app/FocusKeeper.exe --selftest

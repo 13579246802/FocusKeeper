@@ -337,6 +337,7 @@ public sealed class MainForm : Form
         menu.Items.Add("导入事件文件…", null, (_, _) => ImportFile());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("休息音乐 开/关（M）", null, (_, _) => ToggleMusic());
+        menu.Items.Add("自动休息 开/关（到点直接进休息 / 按 4 确认）", null, (_, _) => ToggleAutoBreak());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("打开数据文件夹", null, (_, _) => OpenDataFolder());
         menu.Items.Add(new ToolStripSeparator());
@@ -601,6 +602,17 @@ public sealed class MainForm : Form
         RefreshUi();
     }
 
+    /// <summary>到点是否自动进休息。开 = 音乐直接响起；关 = 只提醒，按 4 才进。写进 settings，重启保留。</summary>
+    private void ToggleAutoBreak()
+    {
+        _settings.AutoBreak = !_settings.AutoBreak;
+        Settings.Save(_settingsPath, _settings);
+        ShowMessage(_settings.AutoBreak
+            ? "自动休息：开。到目标分钟直接进休息、放音乐。"
+            : "自动休息：关。到目标分钟只提醒，按 4 才进休息。", 4);
+        RefreshUi();
+    }
+
     /// <summary>
     /// 按最近表现推荐并设置目标时长。
     /// announce=true（开机）：弹消息说明；false（收工后）：存成待机说明，回到待机再讲。
@@ -683,9 +695,19 @@ public sealed class MainForm : Form
 
         if (r.GoalReached)
         {
-            // 到点提醒要「直接明显」：响一声，把该不该休息、怎么休息一次说清
+            // 到点提醒要「直接明显」：响一声。自动模式直接进休息；手动模式把该不该休息、怎么休息一次说清
             MusicPlayer.Chime();
-            ShowMessage($"到 {_state.GoalMinutes} 分钟了。按 4 休息 {ResolveRest(_settings)} 分钟；不歇也行，按任意键继续。", 10);
+            if (_settings.AutoBreak)
+            {
+                _state.RestMinutes = ResolveRest(_settings);
+                _state.StartBreak();
+                if (_musicOn) MusicPlayer.StartLoop();
+                ShowMessage($"到 {_state.GoalMinutes} 分钟了，休息 {_state.RestMinutes} 分钟，雨声放着（M 关）。想接着练就按 1。", 10);
+            }
+            else
+            {
+                ShowMessage($"到 {_state.GoalMinutes} 分钟了。按 4 休息 {ResolveRest(_settings)} 分钟；不歇也行，按任意键继续。", 10);
+            }
         }
 
         if (r.BreakOver)
