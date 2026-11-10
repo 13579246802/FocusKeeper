@@ -15,7 +15,7 @@
 | `1` | 开始（写一句现在要做什么；顺便选「这件事在不在电脑上做」） |
 | `2` | 结束 |
 | `3` | 走神 —— **计时不会停**，只记一笔，屏幕上给一句安慰 |
-| `4` | 休息 —— 放轻音乐（程序合成的雨声，无外部音频文件） |
+| `4` | 休息 —— 随机放自带钢琴曲（CC-BY，可换成 data\music\ 里的自己的曲子） |
 | `5` | 统计 |
 | `↑` `↓` | 开始前直接换等级：初级 15 分 / 中级 25 分 / 高级 45 分 |
 | `←` `→` | 开始前微调目标分钟（等级按时长自动跟着变） |
@@ -38,7 +38,7 @@
 
 **待机时显示「今日一句」。** 都是书里有出处的话（庄子、荀子、苏轼、胡适、里尔克、村上春树……），每天换一条。没有鸡汤，没有网红语录，每一条都能查到原文。
 
-**休息是循环的一部分，不是中断。** 专注到点响一声，默认**直接进休息**（可右键菜单或 `settings.json` 的 `autoBreak` 改成按 `4` 确认）：初级 3 分 / 中级 5 分 / 高级 10 分（休息长度和专注长度是配套的，短专注配长休息只会让人走神）。休息时放雨声——程序自己合成的棕噪，没有版权也没有 40MB 的音频包。倒计时走完还有 2 分钟缓冲，音乐继续放，屏幕大字等你回来；缓冲期内按 `1`，音乐停，新一轮专注开始，周而复始；缓冲期也没人回来，说明人走了，自动按目标时长收工。
+**休息是循环的一部分，不是中断。** 专注到点响一声，默认**直接进休息**（可右键菜单或 `settings.json` 的 `autoBreak` 改成按 `4` 确认）：初级 3 分 / 中级 5 分 / 高级 10 分（休息长度和专注长度是配套的，短专注配长休息只会让人走神）。休息时随机放**自带的免费钢琴曲**（4 首，Kevin MacLeod 作品，CC-BY 4.0，署名见 `music\LICENSES.txt`；曲子播完自动换下一首）。想听自己的？把音频文件丢进 `data\music\`，你的曲子优先，自带的就不播；曲库全空时退回程序合成的棕噪雨声。倒计时走完还有 2 分钟缓冲，音乐继续放，屏幕大字等你回来；缓冲期内按 `1`，音乐停，新一轮专注开始，周而复始；缓冲期也没人回来，说明人走了，自动按目标时长收工。
 
 ## 下载
 
@@ -57,7 +57,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-回归测试（60 项，覆盖状态机、休息循环、存储修复、截断一致性、文案规范、时长推荐、合成音频）：
+回归测试（74 项，覆盖状态机、休息循环、存储修复、截断一致性、文案规范、时长推荐、合成音频、曲库优先级）：
 
 ```bash
 app/FocusKeeper.exe --selftest
@@ -90,7 +90,7 @@ Single file, zero dependencies, fully local — nothing leaves your machine.
 | `1` | Start (type what you're doing; pick whether the task lives on this PC) |
 | `2` | Stop |
 | `3` | Distract — **the timer keeps running**, it just logs the lapse with a line of comfort |
-| `4` | Break — plays synthesized rain noise (no external audio files) |
+| `4` | Break — plays a random bundled piano track (CC-BY; swap with your own files in data\music\) |
 | `5` | Stats |
 | `↑` `↓` | Switch level directly before starting: Beginner 15 / Intermediate 25 / Advanced 45 min |
 | `←` `→` | Fine-tune goal minutes before starting |
@@ -111,7 +111,18 @@ Single file, zero dependencies, fully local — nothing leaves your machine.
 
 **Duration advice comes from data, not vibes.** On every launch and after every session, the tool suggests today's goal from your recent record (last 3 sessions within 14 days): all achieved with sparse distractions → +10 minutes (cap 60); all missed → −5 (floor 10); a single session never changes anything. Every suggestion comes with its reason, and `↑↓` `←→` always has the final say.
 
-**Break is part of the loop, not an interruption.** When a segment hits its goal, a chime sounds and by default the break starts immediately (right-click menu or `autoBreak` in `settings.json` switches back to press-`4`-to-confirm): 3 min for Beginner / 5 for Intermediate / 10 for Advanced — break length pairs with focus length. The break plays synthesized brown noise; after the countdown a 2-minute grace period begins with the music still on. Press `1` during the grace period and a new focus segment starts; if nobody returns, the session auto-closes at the goal cap.
+**Break is part of the loop, not an interruption.** When a segment hits its goal, a chime sounds and by default the break starts immediately (right-click menu or `autoBreak` in `settings.json` switches back to press-`4`-to-confirm): 3 min for Beginner / 5 for Intermediate / 10 for Advanced — break length pairs with focus length. The break randomly plays one of the **4 bundled royalty-free piano tracks** (Kevin MacLeod, CC-BY 4.0; credits in `music\LICENSES.txt`; when a track ends the next one starts automatically). Drop your own audio files into `data\music\` and yours take priority — bundled tracks are skipped; if no files exist anywhere, it falls back to synthesized brown noise. After the countdown a 2-minute grace period begins with the music still on. Press `1` during the grace period and a new focus segment starts; if nobody returns, the session auto-closes at the goal cap.
+
+### Music credits
+
+| Track | Composer / Performer | License |
+|---|---|---|
+| Gymnopedie No 1 | Erik Satie, perf. Kevin MacLeod | CC-BY 4.0 |
+| Meditation Impromptu 02 | Kevin MacLeod | CC-BY 4.0 |
+| Deliberate Thought | Kevin MacLeod | CC-BY 4.0 |
+| Peace of Mind | Kevin MacLeod | CC-BY 4.0 |
+
+Source: [incompetech.com](https://incompetech.com/music/royalty-free/music.html) · license: [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
 **A "line of the day" while idle.** Every quote shown has a checkable source (Zhuangzi, Xunzi, Su Shi, Hu Shih, Rilke, Murakami...). No chicken soup, no influencer quotes — each one traces back to its original text.
 
@@ -132,7 +143,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-Regression tests (60 checks covering the state machine, the break loop, storage repair, truncation consistency, phrase rules, goal recommendation, and synthesized audio):
+Regression tests (74 checks covering the state machine, the break loop, storage repair, truncation consistency, phrase rules, goal recommendation, synthesized audio, and music library priority):
 
 ```bash
 app/FocusKeeper.exe --selftest

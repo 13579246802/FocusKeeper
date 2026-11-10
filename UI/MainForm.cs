@@ -80,6 +80,7 @@ public sealed class MainForm : Form
 
     // 休息音乐开关（M 键 / 右键菜单）
     private bool _musicOn;
+    private readonly MusicLibrary _music;
 
     private const string HintIdle = "1 开始   ↑↓ 等级   ←→ 分钟   5 统计";
     private const string HintFocus = "1 开始  2 结束  3 走神  4 休息";
@@ -102,6 +103,11 @@ public sealed class MainForm : Form
         };
         _state.OnEvent = _store.Append;
         _musicOn = settings.MusicOn;
+
+        // 曲库：data\music（用户上传）优先，exe 旁 music\（自带）兜底，两处都空才用合成雨声
+        _music = new MusicLibrary(
+            Path.Combine(Path.GetDirectoryName(settingsPath) ?? ".", "music"),
+            Path.Combine(AppContext.BaseDirectory, "music"));
 
         _pendingMode = WorkModeText.Parse(settings.LastWorkMode);
         _pendingFullscreen = settings.LastFullscreen;
@@ -522,8 +528,8 @@ public sealed class MainForm : Form
         {
             _state.RestMinutes = ResolveRest(_settings);
             _state.StartBreak();
-            if (_musicOn) MusicPlayer.StartLoop();
-            ShowMessage($"休息 {_state.RestMinutes} 分钟，雨声放着（M 关音乐）。回来按 1。", 5);
+            var src = StartBreakMusic();
+            ShowMessage($"休息 {_state.RestMinutes} 分钟，{src}（M 关音乐）。回来按 1。", 5);
         }
         else if (_state.Phase == Phase.Break)
         {
@@ -534,6 +540,19 @@ public sealed class MainForm : Form
             ShowMessage("接上了。音乐停了，这一段从头计时。", 4);
         }
         RefreshUi();
+    }
+
+    /// <summary>
+    /// 进休息放音乐：曲库（用户优先、随机挑曲）有货就放曲目，空库退回合成雨声；
+    /// 音乐被关掉就什么都不放。返回用于提示的来源描述。
+    /// </summary>
+    private string StartBreakMusic()
+    {
+        if (!_musicOn) return "音乐已关";
+        var track = _music.PickNext();
+        if (track is not null && MusicPlayer.PlayTrack(track)) return "轻音乐放着";
+        MusicPlayer.StartLoop();
+        return "雨声放着";
     }
 
     private void ShiftGoal(int delta)
@@ -595,7 +614,7 @@ public sealed class MainForm : Form
         _settings.MusicOn = _musicOn;
         Settings.Save(_settingsPath, _settings);
 
-        if (_musicOn && _state.Phase == Phase.Break) MusicPlayer.StartLoop();
+        if (_musicOn && _state.Phase == Phase.Break) StartBreakMusic();
         else if (!_musicOn) MusicPlayer.StopLoop();
 
         ShowMessage(_musicOn ? "休息音乐：开（仅休息时播放）。" : "休息音乐：关。", 3);
@@ -701,8 +720,8 @@ public sealed class MainForm : Form
             {
                 _state.RestMinutes = ResolveRest(_settings);
                 _state.StartBreak();
-                if (_musicOn) MusicPlayer.StartLoop();
-                ShowMessage($"到 {_state.GoalMinutes} 分钟了，休息 {_state.RestMinutes} 分钟，雨声放着（M 关）。想接着练就按 1。", 10);
+                var src = StartBreakMusic();
+                ShowMessage($"到 {_state.GoalMinutes} 分钟了，休息 {_state.RestMinutes} 分钟，{src}（M 关）。想接着练就按 1。", 10);
             }
             else
             {
@@ -728,10 +747,21 @@ public sealed class MainForm : Form
             ShowMessage(_pendingNotice, 8);
         }
 
+        AdvanceTrackIfEnded();
         CheckIdle();
         CheckUnclosed();
         CheckNudge();
         RefreshUi();
+    }
+
+    /// <summary>休息中曲目播完了：换下一首（随机不重复）。雨声是循环播放，不走这里。</summary>
+    private void AdvanceTrackIfEnded()
+    {
+        if (_state.Phase != Phase.Break || !_musicOn) return;
+        if (!MusicPlayer.TrackOpen || MusicPlayer.IsTrackPlaying()) return;
+        var next = _music.PickNext();
+        if (next is not null && MusicPlayer.PlayTrack(next)) return;
+        MusicPlayer.StopLoop();   // 后面没曲子了就安静
     }
 
     /// <summary>

@@ -1,0 +1,26 @@
+休息音乐的版权说明
+========================================
+
+自带曲目共 4 首，全部来自 incompetech.com（Kevin MacLeod），
+以 Creative Commons: By Attribution 4.0 许可发布
+（https://creativecommons.org/licenses/by/4.0/）。
+免费使用、可再分发，唯一要求是署名——本文件和 README 的 credits 即为署名。
+
+曲目清单
+--------
+1. Gymnopedie No 1        Erik Satie 曲，Kevin MacLeod 演奏/制作
+2. Meditation Impromptu 02
+3. Deliberate Thought
+4. Peace of Mind
+
+来源：https://incompetech.com/music/royalty-free/music.html
+作者主页：https://incompetech.com
+许可全文：https://creativecommons.org/licenses/by/4.0/
+
+换掉或新增曲目
+--------
+把这个文件夹里的文件换成任何你喜欢的音频（mp3 / wav / m4a / flac / wma），
+文件名就是曲目名。软件播放时会随机挑、不重复。
+
+想放自己的音乐？不用动这个文件夹——
+把文件放进 data\music\（没有就新建），用户的曲子优先，自带曲目就不播了。

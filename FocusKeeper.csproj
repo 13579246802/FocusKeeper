@@ -21,6 +21,8 @@
     <None Update="data\phrases.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- 自带休息音乐（CC-BY，见 music\LICENSES.txt）：发布时保持 music\ 目录结构 -->
+    <None Include="music\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

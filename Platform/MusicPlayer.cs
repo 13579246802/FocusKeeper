@@ -1,10 +1,13 @@
 using System.Media;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace FocusKeeper.Platform;
 
 /// <summary>
 /// 休息时的轻音乐与提示音。
-/// 不引入外部音频文件——版权和体积都不可控，全部程序合成：
+/// 曲目优先用 MusicLibrary 给的 MP3 等（winmm/MCI 播放，Windows 自带解码，零依赖）；
+/// 曲库为空时退回程序合成的棕噪雨声（不引入外部音频文件）：
 /// 棕噪听起来像远处的雨，适合盖住环境噪音又不抢注意力；
 /// 双音 chime 用于「该休息了」和「休息超时了」两种提醒，音量克制。
 /// WAV 生成为纯函数（可自测），SoundPlayer 只负责播放。
@@ -12,6 +15,7 @@ namespace FocusKeeper.Platform;
 public static class MusicPlayer
 {
     private const int SampleRate = 22050;
+    private const string MciAlias = "fk_music";
 
     private static MemoryStream? _loopStream;
     private static SoundPlayer? _loopPlayer;
@@ -21,11 +25,69 @@ public static class MusicPlayer
 
     public static bool Playing { get; private set; }
 
-    /// <summary>休息开始：循环播放雨声。生成一次，之后复用。</summary>
+    /// <summary>当前是否在播 MCI 曲目（雨声除外）。供 Tick 轮询曲子播完自动换下一首。</summary>
+    public static bool TrackOpen { get; private set; }
+
+    [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
+    private static extern int mciSendString(string command, StringBuilder? returnBuffer, int returnLength, IntPtr callback);
+
+    private static string Mci(string command)
+    {
+        var sb = new StringBuilder(64);
+        mciSendString(command, sb, sb.Capacity, IntPtr.Zero);
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>播一首曲目文件（mp3/wav 等）。声卡或解码失败时返回 false，调用方落到雨声。</summary>
+    public static bool PlayTrack(string path)
+    {
+        lock (Gate)
+        {
+            try
+            {
+                CloseTrack();
+                var type = Path.GetExtension(path).Equals(".wav", StringComparison.OrdinalIgnoreCase)
+                    ? "waveaudio"
+                    : "mpegvideo";                       // mp3 / m4a / wma 走 mpegvideo
+                if (Mci($"open \"{path}\" type {type} alias {MciAlias}") != "0") return false;
+                Mci($"setaudio {MciAlias} volume to 600");   // 音量克制：休息音乐不该盖过门铃
+                if (Mci($"play {MciAlias}") != "0") { CloseTrack(); return false; }
+                TrackOpen = true;
+                Playing = true;
+                return true;
+            }
+            catch
+            {
+                TrackOpen = false;
+                Playing = false;
+                return false;
+            }
+        }
+    }
+
+    /// <summary>曲子是否还在播（MCI 状态）。没开过曲目返回 false。</summary>
+    public static bool IsTrackPlaying()
+    {
+        lock (Gate)
+        {
+            if (!TrackOpen) return false;
+            try { return Mci($"status {MciAlias} mode") == "playing"; }
+            catch { return false; }
+        }
+    }
+
+    private static void CloseTrack()
+    {
+        try { Mci($"close {MciAlias}"); } catch { }
+        TrackOpen = false;
+    }
+
+    /// <summary>休息开始：循环播放合成雨声（曲库为空时的兜底）。生成一次，之后复用。</summary>
     public static void StartLoop()
     {
         lock (Gate)
         {
+            CloseTrack();
             try
             {
                 _loopStream ??= new MemoryStream(BuildWav(BrownNoiseSamples(12, SampleRate)));
@@ -41,12 +103,13 @@ public static class MusicPlayer
         }
     }
 
-    /// <summary>休息结束（人回来了 / 自动收工）：音乐立刻停。</summary>
+    /// <summary>休息结束（人回来了 / 自动收工）：曲目和雨声一起停。</summary>
     public static void StopLoop()
     {
         lock (Gate)
         {
             try { _loopPlayer?.Stop(); } catch { }
+            CloseTrack();
             Playing = false;
         }
     }

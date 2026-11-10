@@ -172,6 +172,38 @@ internal static class SelfTest
         var defSettings = new SettingsData();
         Check("autoBreak 默认开（到点直接进休息）", defSettings.AutoBreak);
 
+        // ---- 2h. 曲库：用户优先 / 空库兜底 / 随机不重复 ----
+        var libRoot = Path.Combine(Path.GetTempPath(), "fk-libtest-" + Guid.NewGuid().ToString("N")[..6]);
+        var libUser = Path.Combine(libRoot, "user");
+        var libDef = Path.Combine(libRoot, "default");
+        Directory.CreateDirectory(libUser);
+        Directory.CreateDirectory(libDef);
+        var lib = new FocusKeeper.Platform.MusicLibrary(libUser, libDef);
+        Check("两处目录都空 → 来源为空（走雨声）", lib.Source is null && lib.PickNext() is null);
+
+        var d1 = Path.Combine(libDef, "A.mp3");
+        var d2 = Path.Combine(libDef, "B.mp3");
+        var d3 = Path.Combine(libDef, "C.txt");   // 不支持的扩展名不收
+        File.WriteAllText(d1, "x"); File.WriteAllText(d2, "x"); File.WriteAllText(d3, "x");
+        Check("空用户目录 → 用自带曲库", lib.Source == "自带" && lib.EffectiveTracks.Count == 2);
+
+        var seen = new HashSet<string>();
+        string? prev = null;
+        for (var i = 0; i < 10; i++)
+        {
+            var t = lib.PickNext();
+            if (t is null) break;
+            if (prev is not null) Check($"随机挑曲不与上一首重复（第 {i} 轮）", t != prev, $"{prev} -> {t}");
+            seen.Add(t);
+            prev = t;
+        }
+        Check("随机轮换覆盖了两首以上", seen.Count >= 2, $"仅 {seen.Count}");
+
+        var u1 = Path.Combine(libUser, "Mine.mp3");
+        File.WriteAllText(u1, "x");
+        Check("用户上传后曲库整体切换", lib.Source == "用户上传" && lib.EffectiveTracks.Single().EndsWith("Mine.mp3", StringComparison.Ordinal));
+        Check("用户曲目优先：自带曲目不再出现", lib.PickNext()!.EndsWith("Mine.mp3", StringComparison.Ordinal));
+
         // ---- 3. 存储与修复 ----
         var tmp = Path.Combine(Path.GetTempPath(), "fk-selftest-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(tmp);
