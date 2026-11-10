@@ -6,7 +6,15 @@ namespace FocusKeeper.Storage;
 public sealed class SettingsData
 {
     [JsonPropertyName("goalMinutes")] public int GoalMinutes { get; set; } = 15;
-    [JsonPropertyName("restMinutes")] public int RestMinutes { get; set; } = 5;
+
+    /// <summary>休息时长（分钟）。0 = 按等级自动：初级 3 / 中级 5 / 高级 10。</summary>
+    [JsonPropertyName("restMinutes")] public int RestMinutes { get; set; } = 0;
+
+    /// <summary>休息倒计时走完后的缓冲期（分钟）：人不在键盘前，给个回来的窗口。</summary>
+    [JsonPropertyName("breakGraceMinutes")] public int BreakGraceMinutes { get; set; } = 2;
+
+    /// <summary>休息时放不放雨声。M 键或右键菜单随时切。</summary>
+    [JsonPropertyName("musicOn")] public bool MusicOn { get; set; } = true;
     [JsonPropertyName("level")] public string Level { get; set; } = "初级";
     [JsonPropertyName("lastTitle")] public string LastTitle { get; set; } = "";
     [JsonPropertyName("globalHotkey")] public bool GlobalHotkey { get; set; } = false;

@@ -78,9 +78,12 @@ public sealed class MainForm : Form
     // 待机时显示的「今日一句」：每天换一条，一天内不闪变
     private string _dailyQuote = "";
 
+    // 休息音乐开关（M 键 / 右键菜单）
+    private bool _musicOn;
+
     private const string HintIdle = "1 开始   ↑↓ 等级   ←→ 分钟   5 统计";
     private const string HintFocus = "1 开始  2 结束  3 走神  4 休息";
-    private const string HintBreak = "1 继续  4 结束休息";
+    private const string HintBreak = "1 回来   4 也回来   M 音乐";
 
     public MainForm(EventStore store, Phrases phrases, SettingsData settings, string settingsPath, string exportDir, int repaired)
     {
@@ -93,10 +96,12 @@ public sealed class MainForm : Form
         _state = new AppState(new SystemClock())
         {
             GoalMinutes = settings.GoalMinutes,
-            RestMinutes = settings.RestMinutes,
+            RestMinutes = ResolveRest(settings),
+            BreakGraceMinutes = Math.Clamp(settings.BreakGraceMinutes, 1, 10),
             Level = settings.Level
         };
         _state.OnEvent = _store.Append;
+        _musicOn = settings.MusicOn;
 
         _pendingMode = WorkModeText.Parse(settings.LastWorkMode);
         _pendingFullscreen = settings.LastFullscreen;
@@ -331,6 +336,8 @@ public sealed class MainForm : Form
         menu.Items.Add("导出今天（JSON）", null, (_, _) => ExportToday());
         menu.Items.Add("导入事件文件…", null, (_, _) => ImportFile());
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("休息音乐 开/关（M）", null, (_, _) => ToggleMusic());
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("打开数据文件夹", null, (_, _) => OpenDataFolder());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Close());
@@ -439,6 +446,7 @@ public sealed class MainForm : Form
         else if (key is Keys.D3 or Keys.NumPad3) { OnKey3(); e.Handled = true; }
         else if (key is Keys.D4 or Keys.NumPad4) { OnKey4(); e.Handled = true; }
         else if (key is Keys.D5 or Keys.NumPad5) { ToggleStats(); e.Handled = true; }
+        else if (key == Keys.M) { ToggleMusic(); e.Handled = true; }
         else if (key == Keys.F11) { ToggleFullscreen(); e.Handled = true; }
         else if (key == Keys.Up) { CycleLevel(1); e.Handled = true; }
         else if (key == Keys.Down) { CycleLevel(-1); e.Handled = true; }
@@ -464,8 +472,11 @@ public sealed class MainForm : Form
                 _txtTitle.SelectAll();
                 break;
             case Phase.Break:
+                MusicPlayer.StopLoop();
+                _unclosedShown = false;   // 新一段的超时提醒从头算
+                _autoStopAt = null;
                 _state.EndBreak();
-                ShowMessage("接上了。", 3);
+                ShowMessage("回来了。音乐停了，这一段从头计时。", 3);
                 break;
             case Phase.Focusing:
                 ShowMessage("已经在计时了。", 2);
@@ -481,6 +492,7 @@ public sealed class MainForm : Form
         var result = _state.Stop("stop");
         if (result is null) return;
 
+        MusicPlayer.StopLoop();   // 休息中按 2 收工，音乐必须跟着停
         _autoStopAt = null;
         _unclosedShown = false;
         _fullscreen = false;
@@ -507,13 +519,18 @@ public sealed class MainForm : Form
     {
         if (_state.Phase == Phase.Focusing)
         {
+            _state.RestMinutes = ResolveRest(_settings);
             _state.StartBreak();
-            ShowMessage("休息中。计时已停，回来按 1。", 4);
+            if (_musicOn) MusicPlayer.StartLoop();
+            ShowMessage($"休息 {_state.RestMinutes} 分钟，雨声放着（M 关音乐）。回来按 1。", 5);
         }
         else if (_state.Phase == Phase.Break)
         {
+            MusicPlayer.StopLoop();
+            _unclosedShown = false;   // 新一段的超时提醒从头算
+            _autoStopAt = null;
             _state.EndBreak();
-            ShowMessage("接上了。", 3);
+            ShowMessage("接上了。音乐停了，这一段从头计时。", 4);
         }
         RefreshUi();
     }
@@ -561,6 +578,27 @@ public sealed class MainForm : Form
         return string.IsNullOrEmpty(p.Source) || p.Source == "自写"
             ? p.Text
             : $"「{p.Text}」 ——{p.Source}";
+    }
+
+    /// <summary>
+    /// 休息时长：settings 里给了正数就用用户的；0 表示按等级自动——
+    /// 短专注配长休息只会让人走神，所以 初级 3 / 中级 5 / 高级 10。
+    /// </summary>
+    private int ResolveRest(SettingsData s) =>
+        s.RestMinutes > 0 ? s.RestMinutes : AppState.RestForLevel(s.Level);
+
+    /// <summary>休息音乐的开关。休息中实时生效；开关状态写进 settings，重启保留。</summary>
+    private void ToggleMusic()
+    {
+        _musicOn = !_musicOn;
+        _settings.MusicOn = _musicOn;
+        Settings.Save(_settingsPath, _settings);
+
+        if (_musicOn && _state.Phase == Phase.Break) MusicPlayer.StartLoop();
+        else if (!_musicOn) MusicPlayer.StopLoop();
+
+        ShowMessage(_musicOn ? "休息音乐：开（仅休息时播放）。" : "休息音乐：关。", 3);
+        RefreshUi();
     }
 
     /// <summary>
@@ -635,6 +673,7 @@ public sealed class MainForm : Form
 
         if (r.Suspended && _state.Current is not null)
         {
+            MusicPlayer.StopLoop();   // 休眠发生在休息中：醒来音乐不能再响
             _state.Stop("suspend", GoalCap());
             _fullscreen = false;
             LoadToday();
@@ -644,14 +683,27 @@ public sealed class MainForm : Form
 
         if (r.GoalReached)
         {
-            var p = _phrases.Next("goal");
-            ShowMessage(Fill(p), 8);
+            // 到点提醒要「直接明显」：响一声，把该不该休息、怎么休息一次说清
+            MusicPlayer.Chime();
+            ShowMessage($"到 {_state.GoalMinutes} 分钟了。按 4 休息 {ResolveRest(_settings)} 分钟；不歇也行，按任意键继续。", 10);
         }
 
         if (r.BreakOver)
         {
-            var p = _phrases.Next("break");
-            ShowMessage(Fill(p), 10);
+            // 休息倒计时走完 → 缓冲期：音乐继续放，把回来要按的键和超时规则交代清楚
+            MusicPlayer.Chime();
+            ShowMessage($"休息超时了。{_state.BreakGraceMinutes} 分钟内按 1 回来继续；还没回来就按 {_state.GoalMinutes} 分钟收工。", 10);
+        }
+
+        if (r.BreakIdle && _state.Current is not null)
+        {
+            MusicPlayer.StopLoop();
+            _state.Stop("break_idle", GoalCap());
+            _fullscreen = false;
+            LoadToday();
+            _statsDirty = true;
+            _pendingNotice = "休息超时没回来，已自动收工。想接着练按 1。";
+            ShowMessage(_pendingNotice, 8);
         }
 
         CheckIdle();
@@ -660,9 +712,12 @@ public sealed class MainForm : Form
         RefreshUi();
     }
 
-    /// <summary>已达目标时，结束时长截到目标分钟；没到目标则不限。</summary>
+    /// <summary>
+    /// 总专注已达目标时，自动收工把时长截到目标分钟。
+    /// 按总时长判断而不是按段：缓冲期自动收工发生在 Break 阶段，此时 GoalReached 已不参考。
+    /// </summary>
     private TimeSpan? GoalCap() =>
-        _state.Phase == Phase.Focusing && _state.GoalReached
+        _state.Current is not null && _state.FocusElapsed >= TimeSpan.FromMinutes(_state.GoalMinutes)
             ? TimeSpan.FromMinutes(_state.GoalMinutes)
             : null;
 
@@ -754,7 +809,8 @@ public sealed class MainForm : Form
 
         if (_unclosedShown) return;
 
-        var over = _state.FocusElapsed - TimeSpan.FromMinutes(_state.GoalMinutes);
+        // 超出时长按「段」算：休息回来开新一段，超时计时从头开始
+        var over = _state.SegmentElapsed - TimeSpan.FromMinutes(_state.GoalMinutes);
         if (over.TotalMinutes < Math.Max(0, _settings.AutoStopGraceMinutes)) return;
 
         _unclosedShown = true;
@@ -816,14 +872,18 @@ public sealed class MainForm : Form
         _lblTime.Text = phase switch
         {
             Phase.Focusing => Fmt(_state.FocusElapsed),
-            Phase.Break => Fmt(_state.BreakRemaining),
+            Phase.Break => _state.InBreakGrace
+                ? $"超时 {Fmt(_state.GraceRemaining)}"
+                : Fmt(_state.BreakRemaining),
             _ => "00:00"
         };
 
         _lblTime.ForeColor = phase switch
         {
             Phase.Focusing => Color.FromArgb(126, 214, 160),
-            Phase.Break => Color.FromArgb(230, 190, 110),
+            Phase.Break => _state.InBreakGrace
+                ? Color.FromArgb(224, 110, 110)
+                : Color.FromArgb(230, 190, 110),
             _ => Color.FromArgb(120, 126, 136)
         };
 
@@ -860,7 +920,10 @@ public sealed class MainForm : Form
 
         if (phase == Phase.Focusing && _state.GoalReached) return "已达标，继续算超额。按 2 收工。";
 
-        if (phase == Phase.Break) return $"休息中，{Fmt(_state.BreakRemaining)} 后提醒你。按 1 或 4 提前回来。";
+        if (phase == Phase.Break)
+            return _state.InBreakGrace
+                ? $"休息超时，{Fmt(_state.GraceRemaining)} 内按 1 回来；超时按 {_state.GoalMinutes} 分钟自动收工。"
+                : $"休息中，{Fmt(_state.BreakRemaining)} 后进缓冲。按 1 回来，M 切音乐。";
 
         if (phase == Phase.Idle)
         {
@@ -1264,9 +1327,10 @@ public sealed class MainForm : Form
         if (reason != SessionSwitchReason.SessionLock) return;
         if (_state.Phase is not (Phase.Focusing or Phase.Break)) return;
 
-        var capped = _state.GoalReached;
+        var capped = _state.FocusElapsed >= TimeSpan.FromMinutes(_state.GoalMinutes);
         var goal = _state.GoalMinutes;
 
+        MusicPlayer.StopLoop();   // 锁屏可能发生在休息中：走人音乐停
         _state.Stop("lock", GoalCap());
         _fullscreen = false;
         LoadToday();
@@ -1316,6 +1380,7 @@ public sealed class MainForm : Form
     {
         if (_state.Current is not null && _state.Phase is Phase.Focusing or Phase.Break)
             _state.Stop("exit");
+        MusicPlayer.StopLoop();
 
         // 全屏时的 Location 是屏幕左上角，存下去下次小窗会跑到角落
         var at = _fullscreenActive && !_windowedBounds.IsEmpty ? _windowedBounds.Location : Location;

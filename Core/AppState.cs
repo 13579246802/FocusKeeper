@@ -15,7 +15,8 @@ public sealed class AppState
     private DateTimeOffset _segStartWall;
 
     private TimeSpan? _breakEndMono;
-    private bool _breakNotified;
+    private TimeSpan? _graceEndMono;
+    private bool _graceNotified;
 
     public AppState(IClock clock)
     {
@@ -28,8 +29,24 @@ public sealed class AppState
     public string Level { get; set; } = "初级";
     public int GoalMinutes { get; set; } = 15;
     public int RestMinutes { get; set; } = 5;
+
+    /// <summary>休息倒计时走完后的缓冲期（分钟）：人不在键盘前，给个回来的窗口。</summary>
+    public int BreakGraceMinutes { get; set; } = 2;
+
     public bool GoalReached { get; private set; }
     public TimeSpan BreakRemaining { get; private set; } = TimeSpan.Zero;
+
+    /// <summary>休息倒计时走完后进入缓冲期；缓冲期内按 1 回来，超时由 UI 自动收工。</summary>
+    public bool InBreakGrace { get; private set; }
+    public TimeSpan GraceRemaining { get; private set; } = TimeSpan.Zero;
+
+    /// <summary>等级 → 默认休息时长。休息要和专注的长度匹配：短专注配长休息只会让人走神。</summary>
+    public static int RestForLevel(string level) => level switch
+    {
+        "高级" => 10,
+        "中级" => 5,
+        _ => 3
+    };
 
     /// <summary>每产生一条事件就回调一次，由 UI 负责落盘。</summary>
     public Action<EventRecord>? OnEvent { get; set; }
@@ -47,6 +64,15 @@ public sealed class AppState
         }
     }
 
+    /// <summary>
+    /// 当前这一段已专注的时长。提醒休息按「段」算而不是按「总」算：
+    /// 否则休息回来后总时长早超目标，刚开始新一段就立刻提醒，循环就没法周而复始了。
+    /// </summary>
+    public TimeSpan SegmentElapsed =>
+        Phase == Phase.Focusing && _segStartMono.HasValue
+            ? _clock.Monotonic - _segStartMono.Value
+            : TimeSpan.Zero;
+
     // ---------- 状态迁移 ----------
 
     public void OpenTitleInput() => Phase = Phase.TitleInput;
@@ -60,7 +86,6 @@ public sealed class AppState
         GoalMinutes = Math.Clamp(goalMinutes, 1, 240);
         Level = level;
         GoalReached = false;
-        _breakNotified = false;
 
         Current = new Session
         {
@@ -116,7 +141,6 @@ public sealed class AppState
         EndSegment("break");
         _breakEndMono = _clock.Monotonic + TimeSpan.FromMinutes(RestMinutes);
         BreakRemaining = TimeSpan.FromMinutes(RestMinutes);
-        _breakNotified = false;
         Phase = Phase.Break;
 
         Emit(new EventRecord
@@ -127,15 +151,21 @@ public sealed class AppState
         });
     }
 
-    /// <summary>结束休息，回到同一 Session 的专注（新起一段）。</summary>
+    /// <summary>结束休息，回到同一 Session 的专注（新起一段）。缓冲期内同样走这里。</summary>
     public void EndBreak()
     {
         if (Phase != Phase.Break || Current is null) return;
 
         Emit(new EventRecord { Type = "break_end", Sid = Current.Id });
         _breakEndMono = null;
-        _breakNotified = false;
+        _graceEndMono = null;
+        _graceNotified = false;
+        InBreakGrace = false;
         BreakRemaining = TimeSpan.Zero;
+        GraceRemaining = TimeSpan.Zero;
+
+        // 新一段从头算提醒：上一轮的「已达标」不能带到这一轮
+        GoalReached = false;
 
         NewSegment();
         Phase = Phase.Focusing;
@@ -158,6 +188,9 @@ public sealed class AppState
         {
             Emit(new EventRecord { Type = "break_end", Sid = Current.Id });
             _breakEndMono = null;
+            _graceEndMono = null;
+            InBreakGrace = false;
+            GraceRemaining = TimeSpan.Zero;
         }
 
         var result = new SessionResult
@@ -184,6 +217,8 @@ public sealed class AppState
         Phase = Phase.Idle;
         GoalReached = false;
         BreakRemaining = TimeSpan.Zero;
+        GraceRemaining = TimeSpan.Zero;
+        InBreakGrace = false;
         return result;
     }
 
@@ -205,20 +240,38 @@ public sealed class AppState
         _lastWall = now;
         _lastMono = mono;
 
-        if (Phase == Phase.Focusing && !GoalReached && FocusElapsed.TotalMinutes >= GoalMinutes)
+        // 提醒休息按「段」算：每个循环专注满目标分钟就提醒一次
+        if (Phase == Phase.Focusing && !GoalReached && SegmentElapsed.TotalMinutes >= GoalMinutes)
         {
             GoalReached = true;
             r.GoalReached = true;
         }
 
-        if (Phase == Phase.Break && _breakEndMono.HasValue)
+        if (Phase == Phase.Break && !InBreakGrace && _breakEndMono.HasValue)
         {
             var remain = _breakEndMono.Value - mono;
             BreakRemaining = remain > TimeSpan.Zero ? remain : TimeSpan.Zero;
-            if (remain <= TimeSpan.Zero && !_breakNotified)
+
+            // 休息倒计时走完 → 进入缓冲期：不结束会话，等人回来；
+            // 缓冲期内按 1 继续，超时由 UI 自动收工（BreakIdle）。
+            if (remain <= TimeSpan.Zero)
             {
-                _breakNotified = true;
+                InBreakGrace = true;
+                _graceEndMono = mono + TimeSpan.FromMinutes(Math.Max(1, BreakGraceMinutes));
+                GraceRemaining = TimeSpan.FromMinutes(Math.Max(1, BreakGraceMinutes));
+                _graceNotified = false;
                 r.BreakOver = true;
+            }
+        }
+
+        if (Phase == Phase.Break && InBreakGrace && _graceEndMono.HasValue)
+        {
+            var gremain = _graceEndMono.Value - mono;
+            GraceRemaining = gremain > TimeSpan.Zero ? gremain : TimeSpan.Zero;
+            if (gremain <= TimeSpan.Zero && !_graceNotified)
+            {
+                _graceNotified = true;
+                r.BreakIdle = true;
             }
         }
 

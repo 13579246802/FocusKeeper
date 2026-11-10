@@ -15,10 +15,11 @@
 | `1` | 开始（写一句现在要做什么；顺便选「这件事在不在电脑上做」） |
 | `2` | 结束 |
 | `3` | 走神 —— **计时不会停**，只记一笔，屏幕上给一句安慰 |
-| `4` | 休息 |
+| `4` | 休息 —— 放轻音乐（程序合成的雨声，无外部音频文件） |
 | `5` | 统计 |
 | `↑` `↓` | 开始前直接换等级：初级 15 分 / 中级 25 分 / 高级 45 分 |
 | `←` `→` | 开始前微调目标分钟（等级按时长自动跟着变） |
+| `M` | 休息音乐 开/关 |
 | `Tab` | 开始前切换载体：电脑上小窗 / 离开电脑小窗 / 离开电脑全屏 |
 | `F11` | 专注中随时切换小窗 / 全屏 |
 | `Ctrl+E` | 导出 CSV |
@@ -37,6 +38,8 @@
 
 **待机时显示「今日一句」。** 都是书里有出处的话（庄子、荀子、苏轼、胡适、里尔克、村上春树……），每天换一条。没有鸡汤，没有网红语录，每一条都能查到原文。
 
+**休息是循环的一部分，不是中断。** 专注到点响一声，建议你休息：初级 3 分 / 中级 5 分 / 高级 10 分（休息长度和专注长度是配套的，短专注配长休息只会让人走神）。休息时放雨声——程序自己合成的棕噪，没有版权也没有 40MB 的音频包。倒计时走完还有 2 分钟缓冲，音乐继续放，屏幕大字等你回来；缓冲期内按 `1`，音乐停，新一轮专注开始，周而复始；缓冲期也没人回来，说明人走了，自动按目标时长收工。
+
 ## 下载
 
 到 [Releases](../../releases) 页面下载 `专注计时器-便携版.zip`，解压后双击 `FocusKeeper.exe`。
@@ -54,7 +57,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-回归测试（45 项，覆盖状态机、存储修复、截断一致性、文案规范、时长推荐）：
+回归测试（59 项，覆盖状态机、休息循环、存储修复、截断一致性、文案规范、时长推荐、合成音频）：
 
 ```bash
 app/FocusKeeper.exe --selftest
@@ -87,10 +90,11 @@ Single file, zero dependencies, fully local — nothing leaves your machine.
 | `1` | Start (type what you're doing; pick whether the task lives on this PC) |
 | `2` | Stop |
 | `3` | Distract — **the timer keeps running**, it just logs the lapse with a line of comfort |
-| `4` | Break |
+| `4` | Break — plays synthesized rain noise (no external audio files) |
 | `5` | Stats |
 | `↑` `↓` | Switch level directly before starting: Beginner 15 / Intermediate 25 / Advanced 45 min |
 | `←` `→` | Fine-tune goal minutes before starting |
+| `M` | Toggle break music |
 | `Tab` | Cycle mode before starting: on-PC window / off-PC window / off-PC fullscreen |
 | `F11` | Toggle window / fullscreen any time while focusing |
 | `Ctrl+E` | Export CSV |
@@ -126,7 +130,7 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o app
 ```
 
-Regression tests (45 checks covering the state machine, storage repair, truncation consistency, phrase rules, and goal recommendation):
+Regression tests (59 checks covering the state machine, the break loop, storage repair, truncation consistency, phrase rules, goal recommendation, and synthesized audio):
 
 ```bash
 app/FocusKeeper.exe --selftest

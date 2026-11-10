@@ -115,7 +115,13 @@ public sealed class EventRecord
 public sealed class TickResult
 {
     public bool GoalReached { get; set; }
+
+    /// <summary>休息倒计时走完，进入缓冲期（缓冲期内按 1 回来，超时自动收工）。</summary>
     public bool BreakOver { get; set; }
+
+    /// <summary>缓冲期也没等到人 —— 由 UI 按目标时长自动收工。</summary>
+    public bool BreakIdle { get; set; }
+
     public bool Suspended { get; set; }
 }
 

@@ -1,5 +1,6 @@
 using System.Text;
 using FocusKeeper.Core;
+using FocusKeeper.Platform;
 using FocusKeeper.Storage;
 
 namespace FocusKeeper;
@@ -115,6 +116,58 @@ internal static class SelfTest
         Check("老记录没有载体时留空", legacySum.ModeLabel == "" && legacySum.ShapeLabel == "",
             $"'{legacySum.ModeLabel}'/'{legacySum.ShapeLabel}'");
 
+        // ---- 2d. 休息循环：缓冲期内按 1 回来，周而复始 ----
+        var c6 = new FakeClock();
+        var s6 = new AppState(c6) { GoalMinutes = 15, RestMinutes = 3, BreakGraceMinutes = 2 };
+        var ev6 = new List<EventRecord>();
+        s6.OnEvent = ev6.Add;
+        s6.Start("缓冲期测试", 15, "初级");
+        c6.Advance(15 * 60);
+        Check("第一段到点提醒休息", s6.Tick().GoalReached);
+
+        s6.StartBreak();
+        c6.Advance(3 * 60);
+        var g2 = s6.Tick();
+        Check("休息倒计时结束进缓冲期", g2.BreakOver && s6.InBreakGrace);
+
+        c6.Advance(60);
+        var g3 = s6.Tick();
+        Check("缓冲期内不自动收工", !g3.BreakIdle && s6.Phase == Phase.Break);
+
+        s6.EndBreak();
+        Check("缓冲期按 1 回到 Focusing", s6.Phase == Phase.Focusing && !s6.InBreakGrace);
+        Check("新一段达标提醒已复位", !s6.GoalReached);
+
+        c6.Advance(15 * 60);
+        Check("新一段再次到点提醒", s6.Tick().GoalReached);
+
+        var r6 = s6.Stop();
+        Check("两段专注累计 1800s（休息不计）",
+            r6 is not null && Math.Abs(r6.FocusSeconds - 1800) < 1, $"实际 {r6?.FocusSeconds}");
+        Check("同一 Session 两个 Segment", ev6.Count(e => e.Type == "segment_end") == 2,
+            $"实际 {ev6.Count(e => e.Type == "segment_end")}");
+
+        // ---- 2e. 缓冲期满没回来 → 自动收工（截到目标） ----
+        var c7 = new FakeClock();
+        var s7 = new AppState(c7) { GoalMinutes = 15, RestMinutes = 2, BreakGraceMinutes = 2 };
+        s7.Start("缓冲期满", 15, "初级");
+        c7.Advance(15 * 60);
+        s7.Tick();
+        s7.StartBreak();
+        c7.Advance(2 * 60);
+        s7.Tick();                        // 休息结束，进缓冲
+        c7.Advance(2 * 60);               // 缓冲期也走完
+        Check("缓冲期满触发 BreakIdle", s7.Tick().BreakIdle);
+
+        var r7 = s7.Stop("break_idle", TimeSpan.FromMinutes(15));
+        Check("缓冲期满自动收工截到 900s",
+            r7 is not null && Math.Abs(r7.FocusSeconds - 900) < 1, $"实际 {r7?.FocusSeconds}");
+        Check("收工后回到 Idle 且缓冲态清空", s7.Phase == Phase.Idle && !s7.InBreakGrace);
+
+        // ---- 2f. 等级默认休息时长 ----
+        Check("等级默认休息：初级 3 / 中级 5 / 高级 10",
+            AppState.RestForLevel("初级") == 3 && AppState.RestForLevel("中级") == 5 && AppState.RestForLevel("高级") == 10);
+
         // ---- 3. 存储与修复 ----
         var tmp = Path.Combine(Path.GetTempPath(), "fk-selftest-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(tmp);
@@ -139,8 +192,11 @@ internal static class SelfTest
         Check("重复导入全部跳过", added == 0 && skipped > 0, $"added={added}, skipped={skipped}");
 
         // ---- 5. 统计 ----
+        // 注意：FakeClock 固定在 2026-11-07，统计日期必须用同一天——
+        // 之前用 DateTime.Today，日期一过测试就无意义地失败（11-10 跑时抓出来的）
+        var fakeToday = new DateTime(2026, 11, 7);
         var summaries = Stats.Sessions(store.ReadAll(out _));
-        var today = Stats.Day(summaries, DateTime.Today);
+        var today = Stats.Day(summaries, fakeToday);
         Check("今日统计能算出专注分钟", today.FocusMinutes >= 20, $"实际 {today.FocusMinutes}");
 
         // ---- 6. CSV 导出 ----
@@ -250,6 +306,19 @@ internal static class SelfTest
             Mk("t1", 30, 25, 1500, 1), Mk("t2", 29, 25, 1500, 1), Mk("t3", 28, 25, 1500, 1)
         }, 25);
         Check("两周没练 → 回原档位起步", stale.GoalMinutes == 25 && stale.Reason.Contains("两周"), $"{stale.GoalMinutes} {stale.Reason}");
+
+        // ---- 9. 合成音频 ----
+        var rain = MusicPlayer.BuildWav(MusicPlayer.BrownNoiseSamples(1, 22050));
+        Check("雨声 WAV 头正确（RIFF/WAVE/PCM）",
+            rain.Length == 44 + 22050 * 2 && rain[0] == (byte)'R' && rain[1] == (byte)'I'
+                && rain[8] == (byte)'W' && rain[9] == (byte)'A' && rain[20] == 1 && rain[34] == 16,
+            $"len={rain.Length}");
+
+        var chime = MusicPlayer.BuildWav(MusicPlayer.ChimeSamples(1.0, 22050));
+        var chimeLoud = false;
+        for (var i = 0; i < 22050; i += 50)
+            if (chime[44 + i * 2] != 0 || chime[45 + i * 2] != 0) { chimeLoud = true; break; }
+        Check("chime WAV 可生成且非静音", chime.Length == 44 + 22050 * 2 && chimeLoud);
 
         var summary = $"selftest: {pass} passed, {fail} failed";
         sb.AppendLine();
