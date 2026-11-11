@@ -28,11 +28,28 @@ public static class MusicPlayer
     [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
     private static extern int mciSendString(string command, StringBuilder? returnBuffer, int returnLength, IntPtr callback);
 
-    private static string Mci(string command)
+    [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
+    private static extern int mciGetErrorString(int errorCode, StringBuilder errorText, int maxLength);
+
+    private static string MciErrorText(int code)
+    {
+        var sb = new StringBuilder(256);
+        mciGetErrorString(code, sb, sb.Capacity);
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>
+    /// 发 MCI 命令：返回值是 mciSendString 的错误码（0 = 成功），
+    /// out 带回的是返回缓冲区文本（open 成功时是设备 ID，status 时是状态）。
+    /// 两者必须分开——早先版本把缓冲区文本当返回值判断成败，open 成功返回的
+    /// 设备 ID "1" 被当成失败，钢琴曲一次都没真正放过，全掉进了（现已废除的）雨声兜底。
+    /// </summary>
+    private static int MciSend(string command, out string result)
     {
         var sb = new StringBuilder(64);
-        mciSendString(command, sb, sb.Capacity, IntPtr.Zero);
-        return sb.ToString().Trim();
+        var ret = mciSendString(command, sb, sb.Capacity, IntPtr.Zero);
+        result = sb.ToString().Trim();
+        return ret;
     }
 
     /// <summary>播一首曲目文件（mp3/wav 等）。声卡或解码失败时返回 false，调用方换一首或静音。</summary>
@@ -46,9 +63,10 @@ public static class MusicPlayer
                 var type = Path.GetExtension(path).Equals(".wav", StringComparison.OrdinalIgnoreCase)
                     ? "waveaudio"
                     : "mpegvideo";                       // mp3 / m4a / wma 走 mpegvideo
-                if (Mci($"open \"{path}\" type {type} alias {MciAlias}") != "0") return false;
-                Mci($"setaudio {MciAlias} volume to 600");   // 音量克制：休息音乐不该盖过门铃
-                if (Mci($"play {MciAlias}") != "0") { CloseTrack(); return false; }
+                if (MciSend($"open \"{path}\" type {type} alias {MciAlias}", out _) != 0) return false;
+                // 音量克制：休息音乐不该盖过门铃。setaudio 失败不致命，不影响放
+                MciSend($"setaudio {MciAlias} volume to 600", out _);
+                if (MciSend($"play {MciAlias}", out _) != 0) { CloseTrack(); return false; }
                 TrackOpen = true;
                 Playing = true;
                 return true;
@@ -68,15 +86,49 @@ public static class MusicPlayer
         lock (Gate)
         {
             if (!TrackOpen) return false;
-            try { return Mci($"status {MciAlias} mode") == "playing"; }
+            try
+            {
+                return MciSend($"status {MciAlias} mode", out var mode) == 0 && mode == "playing";
+            }
             catch { return false; }
         }
     }
 
     private static void CloseTrack()
     {
-        try { Mci($"close {MciAlias}"); } catch { }
+        try { MciSend($"close {MciAlias}", out _); } catch { }
         TrackOpen = false;
+    }
+
+    /// <summary>
+    /// 诊断用（--playtest）：走与 PlayTrack 完全相同的链路打开/播放一个文件，
+    /// 把每步的 MCI 错误码、缓冲文本和错误原文写成报告，用来定位「音乐放不出来」。
+    /// 用独立别名 fk_diag，不碰正常播放的 fk_music。
+    /// </summary>
+    public static string PlayTestReport(string path)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"file={path}");
+        sb.AppendLine($"exists={File.Exists(path)} size={(File.Exists(path) ? new FileInfo(path).Length : 0)}");
+
+        var open = MciSend($"open \"{path}\" type mpegvideo alias fk_diag", out var devId);
+        sb.AppendLine($"open type=mpegvideo errCode={open} devId={devId}");
+        if (open != 0)
+        {
+            sb.AppendLine($"mciError={MciErrorText(open)}");
+            return sb.ToString();
+        }
+
+        sb.AppendLine($"setaudio errCode={MciSend("setaudio fk_diag volume to 600", out _)}");
+        sb.AppendLine($"play errCode={MciSend("play fk_diag", out _)}");
+        Thread.Sleep(1200);
+        MciSend("status fk_diag mode", out var mode);
+        MciSend("status fk_diag length", out var length);
+        sb.AppendLine($"mode after 1.2s={mode}");
+        sb.AppendLine($"length={length}");
+        MciSend("close fk_diag", out _);
+        sb.AppendLine(mode == "playing" ? "=> 播放正常" : "=> open 成功但没在播，需进一步排查");
+        return sb.ToString();
     }
 
     /// <summary>休息结束（人回来了 / 自动收工）：停止曲目。</summary>

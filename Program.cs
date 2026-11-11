@@ -43,6 +43,17 @@ internal static class Program
             return;
         }
 
+        // 开发用：诊断音乐播放链路（MCI 打开/播放/状态/错误原文），写进 playtest.log
+        if (args.Contains("--playtest"))
+        {
+            var p = args.SkipWhile(a => a != "--playtest").Skip(1).FirstOrDefault()
+                     ?? Directory.EnumerateFiles(Path.Combine(baseDir, "music"))
+                         .FirstOrDefault(f => Platform.MusicLibrary.SupportedExtensions.Contains(Path.GetExtension(f)));
+            var report = string.IsNullOrEmpty(p) ? "没有可测的音频文件" : Platform.MusicPlayer.PlayTestReport(p);
+            File.WriteAllText(Path.Combine(baseDir, "playtest.log"), report, new System.Text.UTF8Encoding(false));
+            return;
+        }
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
