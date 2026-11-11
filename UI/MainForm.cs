@@ -80,6 +80,9 @@ public sealed class MainForm : Form
 
     // 休息音乐开关（M 键 / 右键菜单）
     private bool _musicOn;
+
+    // 窗口置顶开关（T 键 / 右键菜单）。重启保留，默认开（工具设计：计时器要一直看得见才防走神）
+    private bool _topMost;
     private readonly MusicLibrary _music;
     private readonly string _userMusicDir;
 
@@ -104,6 +107,7 @@ public sealed class MainForm : Form
         };
         _state.OnEvent = _store.Append;
         _musicOn = settings.MusicOn;
+        _topMost = settings.TopMost;
 
         // 曲库：data\music（用户上传）优先，exe 旁 music\（自带）兜底；放不出来就换一首试，全失败静音
         _userMusicDir = Path.Combine(Path.GetDirectoryName(settingsPath) ?? ".", "music");
@@ -142,7 +146,7 @@ public sealed class MainForm : Form
 
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
-        TopMost = true;
+        TopMost = _topMost;
         ShowInTaskbar = true;
         BackColor = Color.FromArgb(18, 20, 23);
         ForeColor = Color.FromArgb(232, 234, 237);
@@ -343,6 +347,7 @@ public sealed class MainForm : Form
         menu.Items.Add("导入事件文件…", null, (_, _) => ImportFile());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("休息音乐 开/关（M）", null, (_, _) => ToggleMusic());
+        menu.Items.Add("窗口置顶 开/关（T）", null, (_, _) => ToggleTopMost());
         menu.Items.Add("自动休息 开/关（到点直接进休息 / 按 4 确认）", null, (_, _) => ToggleAutoBreak());
         menu.Items.Add("上传我自己的音乐…", null, (_, _) => UploadMusic());
         menu.Items.Add(new ToolStripSeparator());
@@ -455,6 +460,7 @@ public sealed class MainForm : Form
         else if (key is Keys.D4 or Keys.NumPad4) { OnKey4(); e.Handled = true; }
         else if (key is Keys.D5 or Keys.NumPad5) { ToggleStats(); e.Handled = true; }
         else if (key == Keys.M) { ToggleMusic(); e.Handled = true; }
+        else if (key == Keys.T) { ToggleTopMost(); e.Handled = true; }
         else if (key == Keys.F11) { ToggleFullscreen(); e.Handled = true; }
         else if (key == Keys.Up) { CycleLevel(1); e.Handled = true; }
         else if (key == Keys.Down) { CycleLevel(-1); e.Handled = true; }
@@ -645,6 +651,17 @@ public sealed class MainForm : Form
         else if (!_musicOn) MusicPlayer.StopTrack();
 
         ShowMessage(_musicOn ? "休息音乐：开（仅休息时播放）。" : "休息音乐：关。", 3);
+        RefreshUi();
+    }
+
+    /// <summary>窗口置顶开关。T 键或右键菜单随时切；写进 settings，重启保留。</summary>
+    private void ToggleTopMost()
+    {
+        _topMost = !_topMost;
+        TopMost = _topMost;
+        _settings.TopMost = _topMost;
+        Settings.Save(_settingsPath, _settings);
+        ShowMessage(_topMost ? "窗口置顶：开。" : "窗口置顶：关。", 3);
         RefreshUi();
     }
 

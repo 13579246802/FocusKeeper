@@ -18,6 +18,9 @@ public sealed class SettingsData
 
     /// <summary>休息时放不放音乐。M 键或右键菜单随时切。</summary>
     [JsonPropertyName("musicOn")] public bool MusicOn { get; set; } = true;
+
+    /// <summary>窗口是否总在最前面。T 键或右键菜单随时切；重启保留。</summary>
+    [JsonPropertyName("topMost")] public bool TopMost { get; set; } = true;
     [JsonPropertyName("level")] public string Level { get; set; } = "初级";
     [JsonPropertyName("lastTitle")] public string LastTitle { get; set; } = "";
     [JsonPropertyName("globalHotkey")] public bool GlobalHotkey { get; set; } = false;
