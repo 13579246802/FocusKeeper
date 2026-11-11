@@ -84,7 +84,7 @@ public sealed class MainForm : Form
     private readonly string _userMusicDir;
 
     private const string HintIdle = "1 开始   ↑↓ 等级   ←→ 分钟   5 统计";
-    private const string HintFocus = "1 开始  2 结束  3 走神  4 休息";
+    private const string HintFocus = "1 开始  2 结束  4 休息  3/任意键 走神";
     private const string HintBreak = "1 回来   4 也回来   M 音乐";
 
     public MainForm(EventStore store, Phrases phrases, SettingsData settings, string settingsPath, string exportDir, int repaired)
@@ -321,7 +321,7 @@ public sealed class MainForm : Form
             Font = new Font("Microsoft YaHei UI", 10f),
             ForeColor = Color.FromArgb(72, 78, 88),
             TextAlign = ContentAlignment.MiddleCenter,
-            Text = "2 结束    3 走神    4 休息    Esc 回小窗"
+            Text = "2 结束    4 休息    3/任意键 走神    Esc 回小窗"
         };
 
         _pnlFull.Controls.AddRange(new Control[] { _fsTitle, _fsTime, _fsMsg, _fsHint });
@@ -462,8 +462,30 @@ public sealed class MainForm : Form
         else if (key == Keys.Right) { ShiftGoal(5); e.Handled = true; }
         else if (key == Keys.Escape && _fullscreenActive) { _fullscreen = false; RefreshUi(); e.Handled = true; }
         else if (key == Keys.Escape && _statsWanted) { ToggleStats(); e.Handled = true; }
+        else if (_state.Phase == Phase.Focusing && CountsAsDistract(e)) { OnKey3(); e.Handled = true; }
 
         base.OnKeyDown(e);
+    }
+
+    /// <summary>
+    /// 专注阶段的兜底走神键：没被上面各分支占用的键，随便按哪个都记走神（和按 3 一样），
+    /// 免得走神回神后还要摸索 3 的位置。
+    /// 纯修饰键（Shift/Ctrl/Alt/Win 单按）和 Alt 组合键除外：
+    /// 前者单独按没有任何效果，按了纯属误触；后者要给切窗口等系统操作让路。
+    /// </summary>
+    private static bool CountsAsDistract(KeyEventArgs e)
+    {
+        if (e.Alt) return false;
+        return e.KeyCode switch
+        {
+            Keys.None
+                or Keys.ShiftKey or Keys.ControlKey or Keys.Menu
+                or Keys.LShiftKey or Keys.RShiftKey
+                or Keys.LControlKey or Keys.RControlKey
+                or Keys.LMenu or Keys.RMenu
+                or Keys.LWin or Keys.RWin => false,
+            _ => true,
+        };
     }
 
     private void OnKey1()
@@ -719,7 +741,7 @@ public sealed class MainForm : Form
 
             ShowMessage(_pendingMode == WorkMode.OffPc
                 ? "开始。不碰电脑也不算离开，按 2 收工。"
-                : "开始。走神了按 3，不用停表。", 4);
+                : "开始。走神了随便按个键，不用停表。", 4);
             RefreshUi();
         }
         else if (e.KeyCode == Keys.Escape)
@@ -982,7 +1004,7 @@ public sealed class MainForm : Form
 
         _lblHint.Text = phase switch
         {
-            Phase.Focusing => _fullscreenActive ? "2 结束  3 走神  4 休息  Esc 回小窗" : HintFocus,
+            Phase.Focusing => _fullscreenActive ? "2 结束  4 休息  3/任意键 走神  Esc 回小窗" : HintFocus,
             Phase.Break => HintBreak,
             Phase.TitleInput => "Tab 换地方 · Enter 开始 · Esc 取消",
             _ => HintIdle
