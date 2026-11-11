@@ -3,7 +3,7 @@ namespace FocusKeeper.Platform;
 /// <summary>
 /// 休息音乐的曲库。
 /// 优先级是铁律：用户在 data\music 里放了任何支持的音频文件，就只放用户的；
-/// 用户目录空着才用软件自带的 music\ 目录；两处都没有返回空，由调用方落到合成雨声。
+/// 用户目录空着才用软件自带的 music\ 目录；两处都没有返回空，由调用方静音休息。
 /// 随机挑曲，但不会和上一首重复（除非曲库里只有一首）。
 /// </summary>
 public sealed class MusicLibrary
@@ -22,7 +22,7 @@ public sealed class MusicLibrary
         _defaultDir = defaultDir;
     }
 
-    /// <summary>当前生效的曲库来源："用户上传" / "自带" / null（两处都没有，走雨声兜底）。</summary>
+    /// <summary>当前生效的曲库来源："用户上传" / "自带" / null（两处都没有，静音休息）。</summary>
     public string? Source
     {
         get

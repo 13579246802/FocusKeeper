@@ -179,7 +179,7 @@ internal static class SelfTest
         Directory.CreateDirectory(libUser);
         Directory.CreateDirectory(libDef);
         var lib = new FocusKeeper.Platform.MusicLibrary(libUser, libDef);
-        Check("两处目录都空 → 来源为空（走雨声）", lib.Source is null && lib.PickNext() is null);
+        Check("两处目录都空 → 来源为空（静音休息）", lib.Source is null && lib.PickNext() is null);
 
         var d1 = Path.Combine(libDef, "A.mp3");
         var d2 = Path.Combine(libDef, "B.mp3");
@@ -344,12 +344,6 @@ internal static class SelfTest
         Check("两周没练 → 回原档位起步", stale.GoalMinutes == 25 && stale.Reason.Contains("两周"), $"{stale.GoalMinutes} {stale.Reason}");
 
         // ---- 9. 合成音频 ----
-        var rain = MusicPlayer.BuildWav(MusicPlayer.BrownNoiseSamples(1, 22050));
-        Check("雨声 WAV 头正确（RIFF/WAVE/PCM）",
-            rain.Length == 44 + 22050 * 2 && rain[0] == (byte)'R' && rain[1] == (byte)'I'
-                && rain[8] == (byte)'W' && rain[9] == (byte)'A' && rain[20] == 1 && rain[34] == 16,
-            $"len={rain.Length}");
-
         var chime = MusicPlayer.BuildWav(MusicPlayer.ChimeSamples(1.0, 22050));
         var chimeLoud = false;
         for (var i = 0; i < 22050; i += 50)

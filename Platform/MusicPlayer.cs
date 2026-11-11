@@ -6,9 +6,8 @@ namespace FocusKeeper.Platform;
 
 /// <summary>
 /// 休息时的轻音乐与提示音。
-/// 曲目优先用 MusicLibrary 给的 MP3 等（winmm/MCI 播放，Windows 自带解码，零依赖）；
-/// 曲库为空时退回程序合成的棕噪雨声（不引入外部音频文件）：
-/// 棕噪听起来像远处的雨，适合盖住环境噪音又不抢注意力；
+/// 曲目用 MusicLibrary 给的 MP3 等（winmm/MCI 播放，Windows 自带解码，零依赖）；
+/// 曲子放不出来就静音休息，不再合成任何背景声（看书时合成雨声听着像杂音，已废除）；
 /// 双音 chime 用于「该休息了」和「休息超时了」两种提醒，音量克制。
 /// WAV 生成为纯函数（可自测），SoundPlayer 只负责播放。
 /// </summary>
@@ -17,15 +16,13 @@ public static class MusicPlayer
     private const int SampleRate = 22050;
     private const string MciAlias = "fk_music";
 
-    private static MemoryStream? _loopStream;
-    private static SoundPlayer? _loopPlayer;
     private static MemoryStream? _chimeStream;
     private static SoundPlayer? _chimePlayer;
     private static readonly object Gate = new();
 
     public static bool Playing { get; private set; }
 
-    /// <summary>当前是否在播 MCI 曲目（雨声除外）。供 Tick 轮询曲子播完自动换下一首。</summary>
+    /// <summary>当前是否在播 MCI 曲目。供 Tick 轮询曲子播完自动换下一首。</summary>
     public static bool TrackOpen { get; private set; }
 
     [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
@@ -38,7 +35,7 @@ public static class MusicPlayer
         return sb.ToString().Trim();
     }
 
-    /// <summary>播一首曲目文件（mp3/wav 等）。声卡或解码失败时返回 false，调用方落到雨声。</summary>
+    /// <summary>播一首曲目文件（mp3/wav 等）。声卡或解码失败时返回 false，调用方换一首或静音。</summary>
     public static bool PlayTrack(string path)
     {
         lock (Gate)
@@ -82,39 +79,17 @@ public static class MusicPlayer
         TrackOpen = false;
     }
 
-    /// <summary>休息开始：循环播放合成雨声（曲库为空时的兜底）。生成一次，之后复用。</summary>
-    public static void StartLoop()
+    /// <summary>休息结束（人回来了 / 自动收工）：停止曲目。</summary>
+    public static void StopTrack()
     {
         lock (Gate)
         {
-            CloseTrack();
-            try
-            {
-                _loopStream ??= new MemoryStream(BuildWav(BrownNoiseSamples(12, SampleRate)));
-                _loopPlayer ??= new SoundPlayer(_loopStream);
-                _loopPlayer.PlayLooping();
-                Playing = true;
-            }
-            catch
-            {
-                // 声卡不可用不能影响计时主流程
-                Playing = false;
-            }
-        }
-    }
-
-    /// <summary>休息结束（人回来了 / 自动收工）：曲目和雨声一起停。</summary>
-    public static void StopLoop()
-    {
-        lock (Gate)
-        {
-            try { _loopPlayer?.Stop(); } catch { }
             CloseTrack();
             Playing = false;
         }
     }
 
-    /// <summary>提醒音：到点该休息了 / 休息超时了。与循环音乐叠加播放。</summary>
+    /// <summary>提醒音：到点该休息了 / 休息超时了。叠加在曲目上播放。</summary>
     public static void Chime()
     {
         lock (Gate)
@@ -133,32 +108,6 @@ public static class MusicPlayer
     }
 
     // ---------- 合成 ----------
-
-    /// <summary>棕噪（布朗噪声）：比白噪低沉，听感接近雨声。首尾各 1 秒渐隐，循环处不炸耳。</summary>
-    public static double[] BrownNoiseSamples(int seconds, int sampleRate)
-    {
-        var n = seconds * sampleRate;
-        var samples = new double[n];
-        double brown = 0;
-        var fade = sampleRate;               // 1 秒渐变
-        var rng = new Random(20261102);      // 固定种子：每次听起来一样，不给用户「今天雨声不一样」的错觉
-
-        for (var i = 0; i < n; i++)
-        {
-            var white = rng.NextDouble() * 2.0 - 1.0;
-            brown = (brown + 0.02 * white) / 1.02;
-            var v = brown * 3.5;             // 补偿泄漏带来的衰减
-            if (v > 1.0) v = 1.0;
-            if (v < -1.0) v = -1.0;
-
-            if (i < fade) v *= (double)i / fade;               // 渐入
-            if (i > n - fade) v *= (double)(n - i) / fade;     // 渐出
-
-            samples[i] = v * 0.45;           // 整体音量克制：休息音乐不该盖过门铃
-        }
-
-        return samples;
-    }
 
     /// <summary>
     /// 双音 chime：C5 + E5 两个正弦叠加，指数衰减。像轻敲了一下玻璃杯，

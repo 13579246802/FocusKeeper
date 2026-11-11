@@ -105,7 +105,7 @@ public sealed class MainForm : Form
         _state.OnEvent = _store.Append;
         _musicOn = settings.MusicOn;
 
-        // 曲库：data\music（用户上传）优先，exe 旁 music\（自带）兜底，两处都空才用合成雨声
+        // 曲库：data\music（用户上传）优先，exe 旁 music\（自带）兜底；放不出来就换一首试，全失败静音
         _userMusicDir = Path.Combine(Path.GetDirectoryName(settingsPath) ?? ".", "music");
         _music = new MusicLibrary(_userMusicDir, Path.Combine(AppContext.BaseDirectory, "music"));
 
@@ -480,7 +480,7 @@ public sealed class MainForm : Form
                 _txtTitle.SelectAll();
                 break;
             case Phase.Break:
-                MusicPlayer.StopLoop();
+                MusicPlayer.StopTrack();
                 _unclosedShown = false;   // 新一段的超时提醒从头算
                 _autoStopAt = null;
                 _state.EndBreak();
@@ -500,7 +500,7 @@ public sealed class MainForm : Form
         var result = _state.Stop("stop");
         if (result is null) return;
 
-        MusicPlayer.StopLoop();   // 休息中按 2 收工，音乐必须跟着停
+        MusicPlayer.StopTrack();   // 休息中按 2 收工，音乐必须跟着停
         _autoStopAt = null;
         _unclosedShown = false;
         _fullscreen = false;
@@ -534,7 +534,7 @@ public sealed class MainForm : Form
         }
         else if (_state.Phase == Phase.Break)
         {
-            MusicPlayer.StopLoop();
+            MusicPlayer.StopTrack();
             _unclosedShown = false;   // 新一段的超时提醒从头算
             _autoStopAt = null;
             _state.EndBreak();
@@ -544,16 +544,20 @@ public sealed class MainForm : Form
     }
 
     /// <summary>
-    /// 进休息放音乐：曲库（用户优先、随机挑曲）有货就放曲目，空库退回合成雨声；
+    /// 进休息放音乐：曲库（用户优先、随机挑曲）有货就放曲目；
+    /// 一首放不出来就换下一首再试（最多把曲库试一遍），全失败就静音休息。
     /// 音乐被关掉就什么都不放。返回用于提示的来源描述。
     /// </summary>
     private string StartBreakMusic()
     {
         if (!_musicOn) return "音乐已关";
-        var track = _music.PickNext();
-        if (track is not null && MusicPlayer.PlayTrack(track)) return "轻音乐放着";
-        MusicPlayer.StartLoop();
-        return "雨声放着";
+        for (var i = 0; i < _music.EffectiveTracks.Count; i++)
+        {
+            var track = _music.PickNext();
+            if (track is not null && MusicPlayer.PlayTrack(track)) return "轻音乐放着";
+        }
+        MusicPlayer.StopTrack();   // 一首都放不出来：静音，不再有合成雨声
+        return "曲子没放出来，静音休息";
     }
 
     private void ShiftGoal(int delta)
@@ -616,7 +620,7 @@ public sealed class MainForm : Form
         Settings.Save(_settingsPath, _settings);
 
         if (_musicOn && _state.Phase == Phase.Break) StartBreakMusic();
-        else if (!_musicOn) MusicPlayer.StopLoop();
+        else if (!_musicOn) MusicPlayer.StopTrack();
 
         ShowMessage(_musicOn ? "休息音乐：开（仅休息时播放）。" : "休息音乐：关。", 3);
         RefreshUi();
@@ -735,7 +739,7 @@ public sealed class MainForm : Form
 
         if (r.Suspended && _state.Current is not null)
         {
-            MusicPlayer.StopLoop();   // 休眠发生在休息中：醒来音乐不能再响
+            MusicPlayer.StopTrack();   // 休眠发生在休息中：醒来音乐不能再响
             _state.Stop("suspend", GoalCap());
             _fullscreen = false;
             LoadToday();
@@ -769,7 +773,7 @@ public sealed class MainForm : Form
 
         if (r.BreakIdle && _state.Current is not null)
         {
-            MusicPlayer.StopLoop();
+            MusicPlayer.StopTrack();
             _state.Stop("break_idle", GoalCap());
             _fullscreen = false;
             LoadToday();
@@ -785,14 +789,17 @@ public sealed class MainForm : Form
         RefreshUi();
     }
 
-    /// <summary>休息中曲目播完了：换下一首（随机不重复）。雨声是循环播放，不走这里。</summary>
+    /// <summary>休息中曲目播完了：换下一首（随机不重复）。放不出来就换着试，全失败静音。</summary>
     private void AdvanceTrackIfEnded()
     {
         if (_state.Phase != Phase.Break || !_musicOn) return;
         if (!MusicPlayer.TrackOpen || MusicPlayer.IsTrackPlaying()) return;
-        var next = _music.PickNext();
-        if (next is not null && MusicPlayer.PlayTrack(next)) return;
-        MusicPlayer.StopLoop();   // 后面没曲子了就安静
+        for (var i = 0; i < _music.EffectiveTracks.Count; i++)
+        {
+            var next = _music.PickNext();
+            if (next is not null && MusicPlayer.PlayTrack(next)) return;
+        }
+        MusicPlayer.StopTrack();   // 换遍曲库都放不出来就安静
     }
 
     /// <summary>
@@ -1413,7 +1420,7 @@ public sealed class MainForm : Form
         var capped = _state.FocusElapsed >= TimeSpan.FromMinutes(_state.GoalMinutes);
         var goal = _state.GoalMinutes;
 
-        MusicPlayer.StopLoop();   // 锁屏可能发生在休息中：走人音乐停
+        MusicPlayer.StopTrack();   // 锁屏可能发生在休息中：走人音乐停
         _state.Stop("lock", GoalCap());
         _fullscreen = false;
         LoadToday();
@@ -1463,7 +1470,7 @@ public sealed class MainForm : Form
     {
         if (_state.Current is not null && _state.Phase is Phase.Focusing or Phase.Break)
             _state.Stop("exit");
-        MusicPlayer.StopLoop();
+        MusicPlayer.StopTrack();
 
         // 全屏时的 Location 是屏幕左上角，存下去下次小窗会跑到角落
         var at = _fullscreenActive && !_windowedBounds.IsEmpty ? _windowedBounds.Location : Location;

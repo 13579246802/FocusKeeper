@@ -16,7 +16,7 @@ public sealed class SettingsData
     /// <summary>专注到目标分钟后的处理。true = 自动进休息（音乐直接响起）；false = 只提醒，按 4 才进。</summary>
     [JsonPropertyName("autoBreak")] public bool AutoBreak { get; set; } = true;
 
-    /// <summary>休息时放不放雨声。M 键或右键菜单随时切。</summary>
+    /// <summary>休息时放不放音乐。M 键或右键菜单随时切。</summary>
     [JsonPropertyName("musicOn")] public bool MusicOn { get; set; } = true;
     [JsonPropertyName("level")] public string Level { get; set; } = "初级";
     [JsonPropertyName("lastTitle")] public string LastTitle { get; set; } = "";
